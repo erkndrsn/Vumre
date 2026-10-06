@@ -1,0 +1,445 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#163b35">
+  <meta name="description" content="Vera Muhabbet Umre organizasyon ve kafile yönetim uygulaması.">
+  <title>Vera Muhabbet | Umre Yönetimi</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --green-950: #163b35;
+      --green-900: #1c4941;
+      --green-700: #337b68;
+      --green-100: #e7f2ec;
+      --gold: #c79b55;
+      --ink: #20312e;
+      --muted: #7c8985;
+      --line: #e8ece9;
+      --surface: #fff;
+      --canvas: #f6f8f6;
+      --shadow: 0 8px 24px rgb(30 57 48 / 5%);
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--canvas);
+      color: var(--ink);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 14px;
+      -webkit-font-smoothing: antialiased;
+    }
+    button, input, select { font: inherit; }
+    button { cursor: pointer; }
+    .app { min-height: 100vh; }
+    .sidebar {
+      position: fixed;
+      inset: 0 auto 0 0;
+      z-index: 2;
+      display: flex;
+      width: 248px;
+      flex-direction: column;
+      padding: 28px 18px 20px;
+      background: var(--green-950);
+      color: #fff;
+    }
+    .brand { display: flex; align-items: center; gap: 12px; padding: 0 8px 34px; }
+    .brand-mark {
+      display: grid;
+      width: 42px;
+      height: 42px;
+      place-items: center;
+      border: 1px solid rgb(223 195 137 / 65%);
+      border-radius: 50%;
+      color: #e7c783;
+      font-family: Georgia, serif;
+      font-size: 25px;
+    }
+    .brand-name { font-family: Georgia, serif; font-size: 18px; letter-spacing: .3px; }
+    .brand-caption { margin-top: 4px; color: #b6c9c1; font-size: 9px; letter-spacing: 2px; }
+    .nav-label { padding: 0 12px 11px; color: #8da99f; font-size: 10px; font-weight: 700; letter-spacing: 1.5px; }
+    .nav-list { display: grid; gap: 5px; }
+    .nav-button {
+      display: flex;
+      width: 100%;
+      align-items: center;
+      gap: 12px;
+      border: 0;
+      border-radius: 9px;
+      padding: 12px;
+      background: transparent;
+      color: #cfdbd6;
+      text-align: left;
+      transition: background .18s, color .18s;
+    }
+    .nav-button:hover, .nav-button.active { background: rgb(255 255 255 / 10%); color: #fff; }
+    .nav-button.active { box-shadow: inset 3px 0 #d8b46f; }
+    .nav-icon { width: 20px; color: #c4d4cd; font-size: 17px; text-align: center; }
+    .sidebar-spacer { flex: 1; }
+    .help-card { margin: 16px 4px; border: 1px solid rgb(255 255 255 / 13%); border-radius: 11px; padding: 14px; }
+    .help-card strong { display: block; margin-bottom: 5px; font-size: 12px; }
+    .help-card p { margin: 0; color: #b6c9c1; font-size: 11px; line-height: 1.55; }
+    .profile { display: flex; align-items: center; gap: 10px; border-top: 1px solid rgb(255 255 255 / 13%); padding: 17px 5px 0; }
+    .avatar { display: grid; width: 36px; height: 36px; place-items: center; border-radius: 50%; background: #dce9e1; color: var(--green-900); font-weight: 700; }
+    .profile-name { font-size: 12px; font-weight: 650; }
+    .profile-role { margin-top: 3px; color: #b6c9c1; font-size: 10px; }
+
+    .main { min-height: 100vh; margin-left: 248px; padding: 0 36px 44px; }
+    .topbar { display: flex; min-height: 82px; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); }
+    .breadcrumb { color: var(--muted); font-size: 12px; }
+    .breadcrumb strong { color: var(--green-900); font-weight: 650; }
+    .top-actions { display: flex; align-items: center; gap: 14px; }
+    .date-label { color: var(--muted); font-size: 12px; }
+    .icon-button { display: grid; width: 38px; height: 38px; place-items: center; border: 1px solid var(--line); border-radius: 10px; background: #fff; color: var(--green-900); font-size: 17px; }
+    .icon-button:hover { background: var(--green-100); }
+    .page-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; padding: 28px 0 24px; }
+    .eyebrow { margin: 0 0 8px; color: var(--green-700); font-size: 11px; font-weight: 700; letter-spacing: 1.3px; text-transform: uppercase; }
+    h1 { margin: 0; color: var(--green-950); font-family: Georgia, "Times New Roman", serif; font-size: clamp(25px, 3vw, 32px); font-weight: 500; letter-spacing: -.5px; }
+    .subtitle { margin: 8px 0 0; color: var(--muted); font-size: 13px; }
+    .data-note { margin: 7px 0 0; color: #8c9691; font-size: 10px; }
+    .primary-button, .secondary-button { display: inline-flex; min-height: 40px; align-items: center; justify-content: center; gap: 8px; border-radius: 8px; padding: 0 15px; font-weight: 650; }
+    .primary-button { border: 1px solid var(--green-900); background: var(--green-900); color: white; }
+    .primary-button:hover { background: var(--green-950); }
+    .secondary-button { border: 1px solid var(--line); background: white; color: var(--green-900); }
+    .secondary-button:hover { border-color: #b8cec3; background: #f8fbf9; }
+    .metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+    .metric-card, .panel, .trip-card { border: 1px solid var(--line); border-radius: 12px; background: var(--surface); box-shadow: var(--shadow); }
+    .metric-card { min-height: 128px; padding: 18px; }
+    .metric-top { display: flex; align-items: center; justify-content: space-between; color: var(--muted); font-size: 12px; }
+    .metric-icon { display: grid; width: 32px; height: 32px; place-items: center; border-radius: 9px; background: var(--green-100); color: var(--green-700); font-size: 16px; }
+    .metric-value { margin-top: 15px; color: var(--green-950); font-size: 25px; font-weight: 700; letter-spacing: -.6px; }
+    .metric-note { margin-top: 6px; color: var(--muted); font-size: 11px; }
+    .positive { color: var(--green-700); font-weight: 650; }
+    .dashboard-grid { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(280px, .85fr); gap: 18px; margin-top: 20px; }
+    .panel { min-width: 0; padding: 20px; }
+    .panel-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 17px; }
+    .panel-heading h2, .section-title { margin: 0; color: var(--green-950); font-size: 15px; font-weight: 700; }
+    .panel-heading p { margin: 5px 0 0; color: var(--muted); font-size: 11px; }
+    .text-button { border: 0; padding: 4px 0; background: transparent; color: var(--green-700); font-size: 12px; font-weight: 650; white-space: nowrap; }
+    .text-button:hover { color: var(--green-950); }
+    .trip-feature { position: relative; overflow: hidden; min-height: 190px; border-radius: 10px; padding: 20px; background: linear-gradient(115deg, #1c4941, #337b68); color: white; }
+    .trip-feature::after { position: absolute; top: -78px; right: -35px; width: 235px; height: 235px; border: 1px solid rgb(255 255 255 / 13%); border-radius: 50%; content: ""; }
+    .trip-feature::before { position: absolute; top: -42px; right: 1px; width: 162px; height: 162px; border: 1px solid rgb(255 255 255 / 12%); border-radius: 50%; content: ""; }
+    .trip-tag { display: inline-flex; border: 1px solid rgb(255 255 255 / 28%); border-radius: 20px; padding: 5px 9px; color: #edf5ef; font-size: 10px; }
+    .trip-feature h3 { position: relative; z-index: 1; margin: 14px 0 6px; font-family: Georgia, serif; font-size: 23px; font-weight: 500; }
+    .trip-feature > p { position: relative; z-index: 1; margin: 0; color: #d7e7df; font-size: 12px; }
+    .trip-progress { position: relative; z-index: 1; display: flex; align-items: center; justify-content: space-between; gap: 15px; margin-top: 24px; color: #e0eee7; font-size: 11px; }
+    .progress-track { width: 46%; height: 6px; overflow: hidden; border-radius: 6px; background: rgb(255 255 255 / 23%); }
+    .progress-fill { width: 80%; height: 100%; border-radius: inherit; background: #e4c782; }
+    .task-list { display: grid; gap: 0; }
+    .task-row { display: flex; align-items: flex-start; gap: 10px; border-bottom: 1px solid #f0f2f0; padding: 12px 0; }
+    .task-row:last-child { border-bottom: 0; padding-bottom: 0; }
+    .task-row input { width: 16px; height: 16px; flex: 0 0 auto; margin: 2px 0 0; accent-color: var(--green-700); }
+    .task-copy { flex: 1; color: var(--ink); font-size: 12px; line-height: 1.4; }
+    .task-row input:checked + .task-copy { color: #98a39f; text-decoration: line-through; }
+    .task-date { display: block; margin-top: 4px; color: var(--muted); font-size: 10px; }
+    .table-panel { margin-top: 20px; padding: 0; overflow: hidden; }
+    .table-panel .panel-heading { margin: 0; padding: 19px 20px; }
+    .table-tools { display: flex; gap: 9px; }
+    .search-box { position: relative; }
+    .search-box span { position: absolute; top: 50%; left: 11px; color: #85918d; transform: translateY(-50%); }
+    .search-box input, .filter-select { height: 37px; border: 1px solid var(--line); border-radius: 7px; outline: none; background: #fff; color: var(--ink); font-size: 12px; }
+    .search-box input { width: 205px; padding: 0 10px 0 32px; }
+    .filter-select { padding: 0 28px 0 10px; }
+    .search-box input:focus, .filter-select:focus, .form-field input:focus, .form-field select:focus { border-color: #76a48f; box-shadow: 0 0 0 3px rgb(51 123 104 / 10%); }
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; text-align: left; white-space: nowrap; }
+    th { border-top: 1px solid #f0f2f0; border-bottom: 1px solid #f0f2f0; padding: 11px 20px; background: #fbfcfb; color: #89948f; font-size: 10px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase; }
+    td { border-bottom: 1px solid #f1f3f1; padding: 12px 20px; color: #52615b; font-size: 12px; }
+    tbody tr:last-child td { border-bottom: 0; }
+    .person-cell { display: flex; align-items: center; gap: 9px; color: var(--ink); font-weight: 650; }
+    .person-avatar { display: grid; width: 30px; height: 30px; place-items: center; border-radius: 50%; background: #edf3ef; color: var(--green-700); font-size: 10px; font-weight: 700; }
+    .status { display: inline-flex; align-items: center; border-radius: 20px; padding: 5px 9px; font-size: 10px; font-weight: 650; }
+    .status-paid { background: #e9f4ed; color: #39785c; }
+    .status-pending { background: #fff4df; color: #a87527; }
+    .status-confirmed { background: #e9effa; color: #5271a5; }
+    .empty-state { padding: 28px; color: var(--muted); text-align: center; }
+    .trip-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+    .trip-card { padding: 20px; }
+    .trip-card-top { display: flex; justify-content: space-between; gap: 10px; }
+    .trip-card h3 { margin: 0; color: var(--green-950); font-family: Georgia, serif; font-size: 19px; font-weight: 500; }
+    .trip-card p { margin: 8px 0 16px; color: var(--muted); font-size: 12px; }
+    .trip-card .progress-track { width: 100%; background: #edf1ee; }
+    .trip-card .progress-fill { background: var(--green-700); }
+    .trip-card .trip-progress { color: var(--muted); }
+    .finance-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-bottom: 18px; }
+    .finance-grid .metric-card { min-height: 110px; }
+    .finance-grid .metric-value { font-size: 22px; }
+    .full-task-list .task-row { padding: 16px 0; }
+    .full-task-list .task-copy { font-size: 13px; }
+    [hidden] { display: none !important; }
+
+    dialog { width: min(440px, calc(100% - 32px)); border: 1px solid var(--line); border-radius: 14px; padding: 0; box-shadow: 0 24px 80px rgb(15 35 29 / 24%); }
+    dialog::backdrop { background: rgb(18 39 33 / 48%); backdrop-filter: blur(2px); }
+    .dialog-header { display: flex; align-items: flex-start; justify-content: space-between; border-bottom: 1px solid var(--line); padding: 20px 22px; }
+    .dialog-header h2 { margin: 0; color: var(--green-950); font-family: Georgia, serif; font-size: 22px; font-weight: 500; }
+    .dialog-header p { margin: 6px 0 0; color: var(--muted); font-size: 12px; }
+    .close-button { border: 0; background: transparent; color: var(--muted); font-size: 22px; }
+    .form-body { display: grid; gap: 14px; padding: 20px 22px; }
+    .form-field { display: grid; gap: 6px; color: #53625b; font-size: 11px; font-weight: 650; }
+    .form-field input, .form-field select { width: 100%; height: 40px; border: 1px solid var(--line); border-radius: 7px; padding: 0 10px; outline: none; background: white; color: var(--ink); font-size: 13px; }
+    .dialog-actions { display: flex; justify-content: flex-end; gap: 9px; border-top: 1px solid var(--line); padding: 15px 22px; }
+    .toast { position: fixed; right: 24px; bottom: 24px; z-index: 4; max-width: calc(100% - 48px); border-radius: 9px; padding: 12px 16px; background: var(--green-950); color: white; box-shadow: var(--shadow); font-size: 13px; }
+
+    @media (max-width: 1050px) {
+      .sidebar { width: 215px; }
+      .main { margin-left: 215px; padding-right: 24px; padding-left: 24px; }
+      .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .dashboard-grid { grid-template-columns: minmax(0, 1.1fr) minmax(250px, .9fr); }
+    }
+    @media (max-width: 760px) {
+      .sidebar { position: static; width: auto; padding: 13px 16px; }
+      .brand { padding: 0 2px 12px; }
+      .brand-mark { width: 36px; height: 36px; font-size: 21px; }
+      .brand-name { font-size: 16px; }
+      .nav-label, .sidebar-spacer, .help-card, .profile { display: none; }
+      .nav-list { display: flex; gap: 4px; overflow-x: auto; padding-bottom: 2px; }
+      .nav-button { width: auto; flex: 0 0 auto; gap: 7px; padding: 9px 10px; font-size: 11px; }
+      .nav-icon { width: auto; font-size: 14px; }
+      .nav-button.active { box-shadow: inset 0 -2px #d8b46f; }
+      .main { min-height: auto; margin-left: 0; padding: 0 16px 28px; }
+      .topbar { min-height: 60px; }
+      .date-label { display: none; }
+      .page-heading { align-items: flex-start; padding: 22px 0 18px; }
+      .page-heading .primary-button { min-height: 36px; padding: 0 10px; font-size: 11px; }
+      .metrics { gap: 10px; }
+      .metric-card { min-height: 114px; padding: 14px; }
+      .metric-top { align-items: flex-start; gap: 6px; font-size: 10px; }
+      .metric-value { font-size: 22px; }
+      .dashboard-grid, .trip-grid { grid-template-columns: 1fr; gap: 12px; margin-top: 12px; }
+      .panel { padding: 16px; }
+      .table-panel { padding: 0; }
+      .table-panel .panel-heading { flex-wrap: wrap; padding: 16px; }
+      .table-tools { width: 100%; }
+      .search-box { flex: 1; }
+      .search-box input { width: 100%; }
+      .filter-select { max-width: 130px; }
+      th, td { padding-right: 13px; padding-left: 13px; }
+      .finance-grid { grid-template-columns: 1fr; gap: 10px; }
+      .finance-grid .metric-card { min-height: 95px; }
+    }
+    @media (max-width: 390px) {
+      .nav-button { padding: 8px; }
+      .nav-button span:last-child { font-size: 10px; }
+      .metric-value { font-size: 20px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar" aria-label="Ana menü">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">V</div>
+        <div><div class="brand-name">Vera Muhabbet</div><div class="brand-caption">UMRE ORGANİZASYON</div></div>
+      </div>
+      <div class="nav-label">MENÜ</div>
+      <nav class="nav-list" aria-label="Uygulama bölümleri">
+        <button class="nav-button active" type="button" data-view="dashboard"><span class="nav-icon" aria-hidden="true">⌂</span><span>Genel Bakış</span></button>
+        <button class="nav-button" type="button" data-view="passengers"><span class="nav-icon" aria-hidden="true">♙</span><span>Yolcular</span></button>
+        <button class="nav-button" type="button" data-view="trips"><span class="nav-icon" aria-hidden="true">✈</span><span>Kafileler</span></button>
+        <button class="nav-button" type="button" data-view="tasks"><span class="nav-icon" aria-hidden="true">✓</span><span>Görevler</span></button>
+        <button class="nav-button" type="button" data-view="finance"><span class="nav-icon" aria-hidden="true">₺</span><span>Finans</span></button>
+      </nav>
+      <div class="sidebar-spacer"></div>
+      <div class="help-card"><strong>Yardım mı gerekiyor?</strong><p>Kafile yönetiminizle ilgili destek ekibimize ulaşabilirsiniz.</p></div>
+      <div class="profile"><div class="avatar">AÇ</div><div><div class="profile-name">Ayşe Çalışkan</div><div class="profile-role">Organizasyon yöneticisi</div></div></div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div class="breadcrumb">Vera Muhabbet <span aria-hidden="true">/</span> <strong id="breadcrumb-current">Genel Bakış</strong></div>
+        <div class="top-actions"><span class="date-label" id="today-date"></span><button class="icon-button" type="button" aria-label="Bildirimler" title="Bildirimler">♧</button></div>
+      </header>
+      <div class="page-heading">
+        <div><p class="eyebrow">Esselâmü aleyküm, Ayşe Hanım</p><h1 id="page-title">Organizasyon özeti</h1><p class="subtitle" id="page-subtitle">Kafilelerinizi ve yolcularınızı tek ekrandan yönetin.</p><p class="data-note">Örnek veriler görüntülenir; eklediğiniz yolcu kayıtları bu tarayıcıda saklanır.</p></div>
+        <button class="primary-button" type="button" data-open-dialog><span aria-hidden="true">＋</span> Yeni yolcu kaydı</button>
+      </div>
+
+      <section class="view" id="view-dashboard" aria-label="Genel bakış">
+        <div class="metrics">
+          <article class="metric-card"><div class="metric-top">Aktif yolcu <span class="metric-icon" aria-hidden="true">♙</span></div><div class="metric-value" id="passenger-count">248</div><div class="metric-note"><span class="positive">12 yeni kayıt</span> · bu ay</div></article>
+          <article class="metric-card"><div class="metric-top">Yaklaşan kafile <span class="metric-icon" aria-hidden="true">✈</span></div><div class="metric-value">3</div><div class="metric-note">İlk hareket · 18 Ekim</div></article>
+          <article class="metric-card"><div class="metric-top">Tahsilat oranı <span class="metric-icon" aria-hidden="true">↗</span></div><div class="metric-value">78%</div><div class="metric-note"><span class="positive">+6%</span> · geçen aya göre</div></article>
+          <article class="metric-card"><div class="metric-top">Bu ayın tahsilatı <span class="metric-icon" aria-hidden="true">₺</span></div><div class="metric-value">₺1,24M</div><div class="metric-note">Güncel dönem toplamı</div></article>
+        </div>
+        <div class="dashboard-grid">
+          <article class="panel">
+            <div class="panel-heading"><div><h2>Öne çıkan kafile</h2><p>Yaklaşan organizasyonunuz</p></div><button class="text-button" type="button" data-go="trips">Tüm kafileler →</button></div>
+            <div class="trip-feature"><span class="trip-tag">KAYITLAR AÇIK</span><h3>Sonbahar Umresi</h3><p>18 Ekim – 1 Kasım 2026 &nbsp;·&nbsp; 14 gece</p><div class="trip-progress"><span>32 / 40 yolcu</span><div class="progress-track" aria-label="Kontenjanın yüzde 80'i dolu"><div class="progress-fill"></div></div><span>%80 dolu</span></div></div>
+          </article>
+          <article class="panel">
+            <div class="panel-heading"><div><h2>Yaklaşan görevler</h2><p>Organizasyon kontrol listeniz</p></div><button class="text-button" type="button" data-go="tasks">Tümünü gör →</button></div>
+            <div class="task-list" data-task-list="compact">
+              <label class="task-row"><input type="checkbox"><span class="task-copy">Vize evraklarını kontrol et<span class="task-date">Bugün · Sonbahar Umresi</span></span></label>
+              <label class="task-row"><input type="checkbox"><span class="task-copy">Otel oda dağılımını tamamla<span class="task-date">Yarın · Sonbahar Umresi</span></span></label>
+              <label class="task-row"><input type="checkbox" checked><span class="task-copy">Uçuş listesini acenteye ilet<span class="task-date">Tamamlandı · 4 Ekim</span></span></label>
+            </div>
+          </article>
+        </div>
+        <section class="panel table-panel">
+          <div class="panel-heading"><div><h2>Son yolcu kayıtları</h2><p>Organizasyonunuza eklenen yolcular</p></div><button class="text-button" type="button" data-go="passengers">Tüm yolcular →</button></div>
+          <div class="table-wrap"><table><thead><tr><th>Yolcu</th><th>Telefon</th><th>Kafile</th><th>Kayıt tarihi</th><th>Ödeme durumu</th></tr></thead><tbody id="dashboard-people"></tbody></table></div>
+        </section>
+      </section>
+
+      <section class="view" id="view-passengers" aria-label="Yolcular" hidden>
+        <section class="panel table-panel">
+          <div class="panel-heading"><div><h2>Kayıtlı yolcular</h2><p id="people-description">Yolcu bilgilerini ve ödeme durumlarını yönetin.</p></div><div class="table-tools"><label class="search-box"><span aria-hidden="true">⌕</span><input id="people-search" type="search" placeholder="Yolcu ara..." aria-label="Yolcu ara"></label><select id="payment-filter" class="filter-select" aria-label="Ödeme durumuna göre filtrele"><option value="all">Tüm ödemeler</option><option value="Ödendi">Ödendi</option><option value="Bekliyor">Bekliyor</option></select></div></div>
+          <div class="table-wrap"><table><thead><tr><th>Yolcu</th><th>Telefon</th><th>Kafile</th><th>Kayıt tarihi</th><th>Ödeme durumu</th></tr></thead><tbody id="all-people"></tbody></table></div>
+        </section>
+      </section>
+
+      <section class="view" id="view-trips" aria-label="Kafileler" hidden>
+        <div class="trip-grid" id="trip-list"></div>
+      </section>
+
+      <section class="view" id="view-tasks" aria-label="Görevler" hidden>
+        <article class="panel">
+          <div class="panel-heading"><div><h2>Organizasyon kontrol listesi</h2><p>Kafile hazırlıklarını adım adım takip edin.</p></div></div>
+          <div class="task-list full-task-list" data-task-list="full">
+            <label class="task-row"><input type="checkbox"><span class="task-copy">Vize evraklarını kontrol et<span class="task-date">Bugün · Sonbahar Umresi</span></span></label>
+            <label class="task-row"><input type="checkbox"><span class="task-copy">Otel oda dağılımını tamamla<span class="task-date">Yarın · Sonbahar Umresi</span></span></label>
+            <label class="task-row"><input type="checkbox" checked><span class="task-copy">Uçuş listesini acenteye ilet<span class="task-date">Tamamlandı · 4 Ekim</span></span></label>
+            <label class="task-row"><input type="checkbox"><span class="task-copy">Yolcu bilgilendirme toplantısını planla<span class="task-date">12 Ekim · Sonbahar Umresi</span></span></label>
+            <label class="task-row"><input type="checkbox"><span class="task-copy">Transfer saatlerini teyit et<span class="task-date">14 Ekim · Sonbahar Umresi</span></span></label>
+          </div>
+        </article>
+      </section>
+
+      <section class="view" id="view-finance" aria-label="Finans" hidden>
+        <div class="finance-grid">
+          <article class="metric-card"><div class="metric-top">Toplam tahsilat</div><div class="metric-value">₺1.248.500</div><div class="metric-note">Ekim 2026</div></article>
+          <article class="metric-card"><div class="metric-top">Bekleyen ödeme</div><div class="metric-value">₺352.000</div><div class="metric-note">Son ödeme · 12 Ekim</div></article>
+          <article class="metric-card"><div class="metric-top">Tahsilat oranı</div><div class="metric-value">78%</div><div class="metric-note">Tüm aktif kafileler</div></article>
+        </div>
+        <section class="panel table-panel">
+          <div class="panel-heading"><div><h2>Son kayıtlar</h2><p>Yolcuların ödeme takibi</p></div></div>
+          <div class="table-wrap"><table><thead><tr><th>Yolcu</th><th>Kafile</th><th>Ödeme durumu</th></tr></thead><tbody id="finance-people"></tbody></table></div>
+        </section>
+      </section>
+    </main>
+  </div>
+
+  <dialog id="passenger-dialog" aria-labelledby="dialog-title">
+    <form id="passenger-form">
+      <div class="dialog-header"><div><h2 id="dialog-title">Yeni yolcu kaydı</h2><p>Yolcu bilgilerini organizasyonunuza ekleyin.</p></div><button class="close-button" type="button" aria-label="Kapat" data-close-dialog>×</button></div>
+      <div class="form-body">
+        <label class="form-field">Ad soyad<input name="name" type="text" autocomplete="name" required maxlength="80" placeholder="Örn. Zeynep Demir"></label>
+        <label class="form-field">Telefon numarası<input name="phone" type="tel" autocomplete="tel" required maxlength="24" placeholder="05xx xxx xx xx"></label>
+        <label class="form-field">Kafile<select name="trip" required><option>Sonbahar Umresi</option><option>Kasım Umresi</option><option>Yarıyıl Umresi</option></select></label>
+        <label class="form-field">Ödeme durumu<select name="payment"><option>Bekliyor</option><option>Ödendi</option></select></label>
+      </div>
+      <div class="dialog-actions"><button class="secondary-button" type="button" data-close-dialog>Vazgeç</button><button class="primary-button" type="submit">Kaydı oluştur</button></div>
+    </form>
+  </dialog>
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+  <script>
+    const seedPeople = [
+      { name: "Zeynep Demir", phone: "0532 418 26 10", trip: "Sonbahar Umresi", date: "05 Ekim 2026", payment: "Ödendi" },
+      { name: "Mehmet Yıldız", phone: "0541 276 83 45", trip: "Sonbahar Umresi", date: "04 Ekim 2026", payment: "Bekliyor" },
+      { name: "Fatma Kaya", phone: "0505 630 17 92", trip: "Kasım Umresi", date: "03 Ekim 2026", payment: "Ödendi" },
+      { name: "Ahmet Şahin", phone: "0530 842 51 36", trip: "Sonbahar Umresi", date: "02 Ekim 2026", payment: "Bekliyor" },
+      { name: "Elif Çelik", phone: "0553 294 68 07", trip: "Yarıyıl Umresi", date: "01 Ekim 2026", payment: "Ödendi" }
+    ];
+    const titles = {
+      dashboard: ["Genel Bakış", "Organizasyon özeti", "Kafilelerinizi ve yolcularınızı tek ekrandan yönetin."],
+      passengers: ["Yolcular", "Yolcu yönetimi", "Yolcu kayıtlarını ve ödeme durumlarını takip edin."],
+      trips: ["Kafileler", "Umre kafileleri", "Kafile planlarınızı ve kontenjanlarınızı yönetin."],
+      tasks: ["Görevler", "Organizasyon görevleri", "Kafile hazırlıklarını ve yaklaşan işleri takip edin."],
+      finance: ["Finans", "Finansal görünüm", "Tahsilatları ve bekleyen ödemeleri takip edin."]
+    };
+    const trips = [
+      { name: "Sonbahar Umresi", dates: "18 Ekim – 1 Kasım 2026", nights: "14 gece", filled: 32, capacity: 40, status: "Kayıtlar açık" },
+      { name: "Kasım Umresi", dates: "8 – 22 Kasım 2026", nights: "14 gece", filled: 28, capacity: 36, status: "Kayıtlar açık" },
+      { name: "Yarıyıl Umresi", dates: "18 Ocak – 1 Şubat 2027", nights: "14 gece", filled: 19, capacity: 40, status: "Ön kayıt" }
+    ];
+    const storageKey = "vera-muhabbet-passengers";
+    let people = [...seedPeople];
+    try {
+      const saved = JSON.parse(localStorage.getItem(storageKey) || "null");
+      if (Array.isArray(saved)) people = saved.filter(person =>
+        person && ["name", "phone", "trip", "date", "payment"].every(key => typeof person[key] === "string")
+      );
+    } catch {
+      people = [...seedPeople];
+    }
+    const safe = value => String(value).replace(/[&<>"']/g, character => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+    })[character]);
+    const initials = name => name.trim().split(/\s+/).slice(0, 2).map(part => part[0] || "").join("").toLocaleUpperCase("tr-TR");
+    const statusMarkup = payment => `<span class="status ${payment === "Ödendi" ? "status-paid" : "status-pending"}">${safe(payment)}</span>`;
+    const personRow = (person, includeTrip = true) => `<tr>
+      <td><div class="person-cell"><span class="person-avatar">${safe(initials(person.name))}</span>${safe(person.name)}</div></td>
+      ${includeTrip ? `<td>${safe(person.phone)}</td><td>${safe(person.trip)}</td><td>${safe(person.date)}</td><td>${statusMarkup(person.payment)}</td>` : `<td>${safe(person.trip)}</td><td>${statusMarkup(person.payment)}</td>`}
+    </tr>`;
+    function renderPeople() {
+      const dashboard = document.getElementById("dashboard-people");
+      dashboard.innerHTML = people.slice(0, 4).map(person => personRow(person)).join("") ||
+        '<tr><td colspan="5" class="empty-state">Henüz yolcu kaydı yok.</td></tr>';
+      const query = document.getElementById("people-search").value.trim().toLocaleLowerCase("tr-TR");
+      const payment = document.getElementById("payment-filter").value;
+      const filtered = people.filter(person => {
+        const matchesText = `${person.name} ${person.phone} ${person.trip}`.toLocaleLowerCase("tr-TR").includes(query);
+        return matchesText && (payment === "all" || person.payment === payment);
+      });
+      document.getElementById("all-people").innerHTML = filtered.map(person => personRow(person)).join("") ||
+        '<tr><td colspan="5" class="empty-state">Aramanızla eşleşen yolcu bulunamadı.</td></tr>';
+      document.getElementById("finance-people").innerHTML = people.slice(0, 5).map(person => personRow(person, false)).join("") ||
+        '<tr><td colspan="3" class="empty-state">Henüz ödeme kaydı yok.</td></tr>';
+      document.getElementById("passenger-count").textContent = String(248 + Math.max(0, people.length - seedPeople.length));
+      document.getElementById("people-description").textContent = `${people.length} kayıtlı yolcu · Yolcu bilgilerini ve ödeme durumlarını yönetin.`;
+    }
+    function renderTrips() {
+      document.getElementById("trip-list").innerHTML = trips.map(trip => {
+        const percent = Math.round(trip.filled / trip.capacity * 100);
+        return `<article class="trip-card"><div class="trip-card-top"><h3>${safe(trip.name)}</h3><span class="status status-confirmed">${safe(trip.status)}</span></div>
+          <p>${safe(trip.dates)} · ${safe(trip.nights)}</p>
+          <div class="progress-track" aria-label="Kontenjanın yüzde ${percent}'i dolu"><div class="progress-fill" style="width:${percent}%"></div></div>
+          <div class="trip-progress"><span>${trip.filled} / ${trip.capacity} yolcu</span><span>%${percent} dolu</span></div></article>`;
+      }).join("");
+    }
+    function showView(view) {
+      if (!titles[view]) return;
+      document.querySelectorAll(".view").forEach(section => { section.hidden = section.id !== `view-${view}`; });
+      document.querySelectorAll(".nav-button").forEach(button => button.classList.toggle("active", button.dataset.view === view));
+      const [label, title, subtitle] = titles[view];
+      document.getElementById("breadcrumb-current").textContent = label;
+      document.getElementById("page-title").textContent = title;
+      document.getElementById("page-subtitle").textContent = subtitle;
+    }
+    document.querySelectorAll(".nav-button").forEach(button => button.addEventListener("click", () => showView(button.dataset.view)));
+    document.querySelectorAll("[data-go]").forEach(button => button.addEventListener("click", () => showView(button.dataset.go)));
+    const dialog = document.getElementById("passenger-dialog");
+    document.querySelectorAll("[data-open-dialog]").forEach(button => button.addEventListener("click", () => dialog.showModal()));
+    document.querySelectorAll("[data-close-dialog]").forEach(button => button.addEventListener("click", () => dialog.close()));
+    document.getElementById("passenger-form").addEventListener("submit", event => {
+      event.preventDefault();
+      const form = new FormData(event.currentTarget);
+      people.unshift({
+        name: String(form.get("name")).trim(),
+        phone: String(form.get("phone")).trim(),
+        trip: String(form.get("trip")),
+        date: new Intl.DateTimeFormat("tr-TR", { day: "2-digit", month: "long", year: "numeric" }).format(new Date()),
+        payment: String(form.get("payment"))
+      });
+      try { localStorage.setItem(storageKey, JSON.stringify(people)); } catch { /* Keep this session's records available. */ }
+      renderPeople();
+      event.currentTarget.reset();
+      dialog.close();
+      showView("passengers");
+      const toast = document.getElementById("toast");
+      toast.textContent = "Yolcu kaydı oluşturuldu.";
+      toast.hidden = false;
+      window.setTimeout(() => { toast.hidden = true; }, 2600);
+    });
+    document.getElementById("people-search").addEventListener("input", renderPeople);
+    document.getElementById("payment-filter").addEventListener("change", renderPeople);
+    document.getElementById("today-date").textContent = new Intl.DateTimeFormat("tr-TR", { weekday: "long", day: "numeric", month: "long", year: "numeric" }).format(new Date());
+    renderPeople();
+    renderTrips();
+  </script>
+</body>
+</html>
