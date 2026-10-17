@@ -12,6 +12,7 @@ import {
   adminOnlyField,
   adminOrManagedRegion,
   isAdmin,
+  isRegionManager,
   managedRegionIds,
 } from '../lib/access'
 import { assignPilgrimsEndpoint } from '../lib/roomBoard'
@@ -36,9 +37,9 @@ export const Pilgrims: CollectionConfig = {
   slug: 'pilgrims',
   labels: { singular: 'Umreci', plural: 'Umreciler' },
   access: {
-    // Bölge yöneticisi yalnızca kendi bölgelerindeki umrecileri görür, ekler ve kişi bilgilerini
-    // düzenler; seçilen bölgenin kendi bölgesi olduğu beforeChange'de denetlenir.
-    read: adminOrManagedRegion('region'),
+    // Bölge yöneticisi tüm umrecileri görür; yalnızca kendi bölgelerindekileri ekler ve kişi
+    // bilgilerini düzenler. Seçilen bölgenin kendi bölgesi olduğu beforeChange'de denetlenir.
+    read: ({ req }) => isAdmin(req.user) || isRegionManager(req.user),
     update: adminOrManagedRegion('region'),
     create: ({ req }) => isAdmin(req.user) || managedRegionIds(req.user).length > 0,
     delete: adminOnly,

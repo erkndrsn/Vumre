@@ -78,9 +78,12 @@ const paymentGroups = ref<PaymentGroup[]>([])
 const newGroupOpen = ref(false)
 const newGroupName = ref('')
 const creatingGroup = ref(false)
-// Pasif bölgeler yeni seçime kapalı; kişinin mevcut bölgesi pasif olsa da listede kalır.
+// Pasif bölgeler ve bölge yöneticisinin sorumlu olmadığı bölgeler seçime kapalı; kişinin mevcut
+// bölgesi listede kalır.
 const regionOptions = computed(() =>
-  regions.value.filter((r) => r.active !== false || r.id === form.region),
+  regions.value.filter(
+    (r) => r.id === form.region || (r.active !== false && auth.canEditRegion(r.id)),
+  ),
 )
 const flightPointOptions = computed(() =>
   flightPoints.value.filter((p) => p.active !== false || p.id === form.flightPoint),
@@ -117,6 +120,12 @@ const roomsLoading = ref(false)
 const occupantsByRoom = ref<Record<number, Pilgrim[]>>({})
 const assigning = ref(false)
 const archiving = ref(false)
+
+// Bölge yöneticisi başka bölgelerdeki umrecileri yalnızca görüntüler; yetki kayıtlı bölgeye göre.
+const canEdit = computed(
+  () =>
+    !isEdit.value || (pilgrim.value !== null && auth.canEditRegion(idOf(pilgrim.value.region))),
+)
 
 // Programı iptal eden kişi arşivdedir: odası yoktur ve odaya atanamaz.
 const isArchived = computed(() => pilgrim.value?.archived === true)
@@ -190,7 +199,7 @@ function payload() {
 
 // Yeni kayıtta bölge listeden gelen filtreyle ya da yöneticinin tek bölgesiyle önceden seçilir.
 function preselectRegion() {
-  const active = regions.value.filter((r) => r.active !== false)
+  const active = regions.value.filter((r) => r.active !== false && auth.canEditRegion(r.id))
   const fromQuery = Number(route.query.region)
   if (active.some((r) => r.id === fromQuery)) form.region = fromQuery
   else if (active.length === 1) form.region = active[0]!.id
@@ -473,9 +482,14 @@ onMounted(async () => {
     <div v-if="error" class="alert alert-error" role="alert">{{ error }}</div>
     <div v-if="success" class="alert alert-success" role="status">{{ success }}</div>
 
+    <div v-if="isEdit && pilgrim && !canEdit" class="alert alert-info" role="status">
+      Bu umreci sorumlu olduğunuz bölgelerden birinde değil; bilgilerini yalnızca
+      görüntüleyebilirsiniz.
+    </div>
+
     <form class="card form block" @submit.prevent="save">
       <h2>Kişi bilgileri</h2>
-      <div class="form-grid">
+      <fieldset class="form-grid" :disabled="!canEdit">
         <label class="field">
           <span>Ad</span>
           <input v-model="form.firstName" required />
@@ -587,8 +601,8 @@ onMounted(async () => {
           <span>Açıklama</span>
           <textarea v-model="form.description" rows="2" />
         </label>
-      </div>
-      <div class="form-actions">
+      </fieldset>
+      <div v-if="canEdit" class="form-actions">
         <button v-if="isEdit && isAdmin" type="button" class="btn btn-danger" @click="destroy">
           Sil
         </button>
@@ -607,7 +621,7 @@ onMounted(async () => {
       </div>
     </form>
 
-    <PilgrimDocuments v-if="pilgrimId" :pilgrim-id="pilgrimId" />
+    <PilgrimDocuments v-if="pilgrimId && canEdit" :pilgrim-id="pilgrimId" />
 
     <div v-if="isEdit && !isArchived && isAdmin" class="card block">
       <h2>Oda ataması</h2>
@@ -731,6 +745,13 @@ onMounted(async () => {
 .alert,
 .block {
   margin-bottom: 1rem;
+}
+
+fieldset.form-grid {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
 }
 
 .archived {

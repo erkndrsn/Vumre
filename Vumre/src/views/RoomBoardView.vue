@@ -824,6 +824,7 @@ onMounted(async () => {
 .stats {
   display: flex;
   gap: 0.75rem;
+  flex-wrap: wrap;
   font-size: 0.875rem;
   color: var(--color-muted);
 }
@@ -1448,6 +1449,16 @@ input[type='search'],
 @media (hover: none) {
   .remove {
     opacity: 1;
+  }
+
+  .remove {
+    min-width: 1.75rem;
+    min-height: 1.75rem;
+  }
+
+  .assign {
+    width: 1.9rem;
+    height: 1.9rem;
   }
 }
 

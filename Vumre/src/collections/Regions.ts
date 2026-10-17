@@ -1,12 +1,14 @@
 import { APIError, type CollectionConfig } from 'payload'
 
-import { adminOnly, adminOrManagedRegion } from '../lib/access'
+import { adminOnly, isAdmin, isRegionManager } from '../lib/access'
 
 export const Regions: CollectionConfig = {
   slug: 'regions',
   labels: { singular: 'Bölge', plural: 'Bölgeler' },
   access: {
-    read: adminOrManagedRegion('id'),
+    // Bölge yöneticisi tüm umrecileri gördüğü için bölge adlarını da görür; sorumlu olduğu
+    // bölgeler kullanıcı kaydındaki `regions` alanındadır.
+    read: ({ req }) => isAdmin(req.user) || isRegionManager(req.user),
     create: adminOnly,
     update: adminOnly,
     delete: adminOnly,

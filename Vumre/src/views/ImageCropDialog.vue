@@ -304,6 +304,7 @@ const pct = (v: number) => `${v * 100}%`
   gap: 1rem;
   width: min(100%, 900px);
   max-height: calc(100vh - 2rem);
+  max-height: calc(100dvh - 2rem);
   overflow: auto;
 }
 

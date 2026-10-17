@@ -89,6 +89,7 @@ async function handleLogout() {
 <style scoped>
 .app-shell {
   min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
 }
@@ -175,6 +176,15 @@ async function handleLogout() {
     border-right: 0;
     border-bottom: 1px solid var(--color-border);
     overflow-x: auto;
+  }
+
+  .nav-link {
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+
+  .topbar {
+    padding: 0.625rem 1rem;
   }
 
   .content {

@@ -7,8 +7,20 @@ export const useAuthStore = defineStore('auth', () => {
   const user = ref<User | null>(null)
   const initialized = ref(false)
   const isAuthenticated = computed(() => user.value !== null)
-  // Bölge yöneticisi yalnızca kendi bölgelerindeki umrecileri görür; geri kalan her şey admine ait.
+  // Bölge yöneticisi tüm umrecileri görür, yalnızca kendi bölgelerindekileri ekler ve düzenler;
+  // geri kalan her şey admine ait.
   const isAdmin = computed(() => user.value?.role === 'admin')
+  const managedRegionIds = computed(() =>
+    user.value?.role === 'regionManager'
+      ? (user.value.regions ?? []).map((r) => (typeof r === 'object' ? r.id : r))
+      : [],
+  )
+
+  /** Bu bölgedeki umrecileri ekleyip düzenleyebilir mi? */
+  function canEditRegion(regionId: number | null | undefined) {
+    if (isAdmin.value) return true
+    return regionId != null && managedRegionIds.value.includes(regionId)
+  }
 
   let pending: Promise<void> | null = null
 
@@ -49,5 +61,16 @@ export const useAuthStore = defineStore('auth', () => {
     initialized.value = true
   }
 
-  return { user, initialized, isAuthenticated, isAdmin, fetchMe, login, logout, clear }
+  return {
+    user,
+    initialized,
+    isAuthenticated,
+    isAdmin,
+    managedRegionIds,
+    canEditRegion,
+    fetchMe,
+    login,
+    logout,
+    clear,
+  }
 })

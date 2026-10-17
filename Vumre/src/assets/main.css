@@ -129,6 +129,11 @@
   color: var(--color-success);
 }
 
+.alert-info {
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+}
+
 /* Sayfa başlığı */
 .page-header {
   display: flex;
@@ -253,4 +258,18 @@
   padding: 2rem 1rem;
   text-align: center;
   color: var(--color-muted);
+}
+
+/* Dokunmatik ekranlar */
+@media (pointer: coarse) {
+  /* iOS Safari 16px altındaki alanlara odaklanınca sayfayı yakınlaştırır. */
+  input:not([type='checkbox'], [type='radio'], [type='range']),
+  select,
+  textarea {
+    font-size: max(16px, 1em) !important;
+  }
+
+  .btn-sm {
+    min-height: 2.25rem;
+  }
 }

@@ -390,6 +390,7 @@ onMounted(async () => {
   display: flex;
   gap: 0.5rem;
   align-items: center;
+  flex-wrap: wrap;
 }
 
 .intro {
@@ -429,7 +430,7 @@ h3 {
   margin: 0 0 0.75rem;
   padding: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr));
   gap: 0.5rem;
 }
 

@@ -236,6 +236,7 @@ onMounted(async () => {
   display: flex;
   gap: 0.5rem;
   align-items: center;
+  flex-wrap: wrap;
 }
 
 .alert {
@@ -245,6 +246,7 @@ onMounted(async () => {
 .modal {
   width: min(640px, calc(100vw - 2rem));
   max-height: calc(100vh - 2rem);
+  max-height: calc(100dvh - 2rem);
   overflow: auto;
   padding: 0;
   color: var(--color-text);

@@ -96,29 +96,46 @@ describe('Bölge yöneticisi yetkileri', () => {
     ).rejects.toThrow()
   })
 
-  it('yalnızca kendi bölgesindeki umrecileri görür', async () => {
+  it('tüm bölgelerdeki umrecileri ve bölgeleri görür', async () => {
     const own = await createPilgrim('Kendi', ownRegion)
     const other = await createPilgrim('Diğer', otherRegion)
 
     const { docs } = await payload.find({
       collection: 'pilgrims',
       where: { id: { in: [own.id, other.id] } },
+      sort: 'id',
       req: managerReq,
       ...asManager,
     })
-    expect(docs.map((d) => d.id)).toEqual([own.id])
+    expect(docs.map((d) => d.id)).toEqual([own.id, other.id])
 
-    await expect(
-      payload.findByID({ collection: 'pilgrims', id: other.id, req: managerReq, ...asManager }),
-    ).rejects.toThrow()
+    const found = await payload.findByID({
+      collection: 'pilgrims',
+      id: other.id,
+      depth: 1,
+      req: managerReq,
+      ...asManager,
+    })
+    expect(typeof found.region === 'object' && found.region?.id).toBe(otherRegion)
 
     const regions = await payload.find({
       collection: 'regions',
-      limit: 0,
+      where: { id: { in: [ownRegion, otherRegion] } },
       req: managerReq,
       ...asManager,
     })
-    expect(regions.docs.map((r) => r.id)).toEqual([ownRegion])
+    expect(regions.docs.map((r) => r.id).sort()).toEqual([ownRegion, otherRegion].sort())
+  })
+
+  it('başka bölgedeki umrecinin dokümanlarına erişemez', async () => {
+    const other = await createPilgrim('Dokümansız', otherRegion)
+    const { docs } = await payload.find({
+      collection: 'pilgrim-documents',
+      where: { pilgrim: { equals: other.id } },
+      req: managerReq,
+      ...asManager,
+    })
+    expect(docs).toHaveLength(0)
   })
 
   it('kendi bölgesindeki umrecinin kişi bilgilerini günceller, oda ve arşivi değiştiremez', async () => {

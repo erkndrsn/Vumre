@@ -98,7 +98,13 @@ onMounted(async () => {
           </select>
         </label>
         <RouterLink
-          :to="{ name: 'pilgrim-new', query: regionFilter ? { region: String(regionFilter) } : {} }"
+          :to="{
+            name: 'pilgrim-new',
+            query:
+              regionFilter && auth.canEditRegion(regionFilter)
+                ? { region: String(regionFilter) }
+                : {},
+          }"
           class="btn btn-primary"
           >Yeni umreci</RouterLink
         >
@@ -112,7 +118,15 @@ onMounted(async () => {
     <div v-else class="region-grid">
       <article v-for="g in groups" :key="g.key" class="card region">
         <header class="region-header">
-          <h2>{{ g.name }}</h2>
+          <h2>
+            {{ g.name }}
+            <span
+              v-if="g.key !== 'none' && !auth.canEditRegion(Number(g.key))"
+              class="badge"
+              title="Sorumlu olduğunuz bölgelerden biri değil; kayıtlar yalnızca görüntülenebilir."
+              >Yalnızca görüntüleme</span
+            >
+          </h2>
           <span class="muted">
             {{ g.pilgrims.length }} kişi · {{ g.male }} E · {{ g.female }} K
           </span>
@@ -120,28 +134,30 @@ onMounted(async () => {
         <p v-if="managersByRegion[g.key]" class="muted managers">
           Yönetici: {{ managersByRegion[g.key]?.join(', ') }}
         </p>
-        <table class="table compact">
-          <thead>
-            <tr>
-              <th>Ad Soyad</th>
-              <th>Telefon</th>
-              <th>Cinsiyet</th>
-              <th class="num">Yaş</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="p in g.pilgrims" :key="p.id">
-              <td>
-                <RouterLink :to="{ name: 'pilgrim-edit', params: { id: p.id } }">
-                  {{ p.firstName }} {{ p.lastName }}
-                </RouterLink>
-              </td>
-              <td>{{ p.phone || '—' }}</td>
-              <td>{{ GENDER_LABELS[p.gender] }}</td>
-              <td class="num">{{ ageOn(p.birthDate) ?? '—' }}</td>
-            </tr>
-          </tbody>
-        </table>
+        <div class="table-wrap">
+          <table class="table compact">
+            <thead>
+              <tr>
+                <th>Ad Soyad</th>
+                <th>Telefon</th>
+                <th>Cinsiyet</th>
+                <th class="num">Yaş</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="p in g.pilgrims" :key="p.id">
+                <td>
+                  <RouterLink :to="{ name: 'pilgrim-edit', params: { id: p.id } }">
+                    {{ p.firstName }} {{ p.lastName }}
+                  </RouterLink>
+                </td>
+                <td>{{ p.phone || '—' }}</td>
+                <td>{{ GENDER_LABELS[p.gender] }}</td>
+                <td class="num">{{ ageOn(p.birthDate) ?? '—' }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </article>
     </div>
   </section>
@@ -152,6 +168,7 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   gap: 0.75rem;
+  flex-wrap: wrap;
 }
 
 .alert {
@@ -160,7 +177,7 @@ onMounted(async () => {
 
 .region-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
   gap: 1rem;
   align-items: start;
 }

@@ -55,7 +55,8 @@ export const Users: CollectionConfig = {
       hasMany: true,
       admin: {
         condition: (data) => data?.role === 'regionManager',
-        description: 'Bölge yöneticisi yalnızca bu bölgelerdeki umrecileri görür ve düzenler.',
+        description:
+          'Bölge yöneticisi yalnızca bu bölgelere umreci ekler ve bu bölgelerdekileri düzenler; diğer bölgeleri yalnızca görüntüler.',
       },
       access: { update: ({ req }) => isAdmin(req.user) },
     },

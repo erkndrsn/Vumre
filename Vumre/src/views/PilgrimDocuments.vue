@@ -379,6 +379,7 @@ h3 {
 .lightbox img {
   max-width: 100%;
   max-height: calc(100vh - 6rem);
+  max-height: calc(100dvh - 6rem);
   object-fit: contain;
   border-radius: var(--radius);
 }

@@ -485,7 +485,7 @@ onMounted(load)
 
 .totals {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
   gap: 1rem;
   margin-bottom: 1rem;
 }
@@ -502,7 +502,7 @@ onMounted(load)
 
 .total dl {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(6.5rem, 1fr));
   gap: 0.75rem;
   margin: 0;
 }
