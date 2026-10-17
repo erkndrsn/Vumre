@@ -7,6 +7,8 @@ export const useAuthStore = defineStore('auth', () => {
   const user = ref<User | null>(null)
   const initialized = ref(false)
   const isAuthenticated = computed(() => user.value !== null)
+  // Bölge yöneticisi yalnızca kendi bölgelerindeki umrecileri görür; geri kalan her şey admine ait.
+  const isAdmin = computed(() => user.value?.role === 'admin')
 
   let pending: Promise<void> | null = null
 
@@ -28,8 +30,8 @@ export const useAuthStore = defineStore('auth', () => {
     return pending
   }
 
-  async function login(email: string, password: string) {
-    const res = await authApi.login(email, password)
+  async function login(username: string, password: string) {
+    const res = await authApi.login(username, password)
     user.value = res.user
     initialized.value = true
   }
@@ -47,5 +49,5 @@ export const useAuthStore = defineStore('auth', () => {
     initialized.value = true
   }
 
-  return { user, initialized, isAuthenticated, fetchMe, login, logout, clear }
+  return { user, initialized, isAuthenticated, isAdmin, fetchMe, login, logout, clear }
 })

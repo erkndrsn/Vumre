@@ -19,6 +19,8 @@ const saving = ref(false)
 const error = ref('')
 const editingId = ref<number | null>(null)
 const showForm = ref(false)
+const dialog = ref<HTMLDialogElement | null>(null)
+const formError = ref('')
 
 const emptyForm = (): FormState => ({
   roomNumber: '',
@@ -73,7 +75,7 @@ function openEdit(room: Room) {
 
 async function save() {
   saving.value = true
-  error.value = ''
+  formError.value = ''
   try {
     const data = { ...form, roomType: form.roomType ?? undefined }
     if (editingId.value) await update<Room>('rooms', editingId.value, data)
@@ -81,7 +83,7 @@ async function save() {
     showForm.value = false
     await loadRooms()
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Kaydedilemedi.'
+    formError.value = e instanceof Error ? e.message : 'Kaydedilemedi.'
   } finally {
     saving.value = false
   }
@@ -99,6 +101,15 @@ async function destroy(room: Room) {
 }
 
 watch(filterType, loadRooms)
+
+watch(showForm, (open) => {
+  if (open) {
+    formError.value = ''
+    dialog.value?.showModal()
+  } else {
+    dialog.value?.close()
+  }
+})
 
 onMounted(async () => {
   try {
@@ -132,41 +143,50 @@ onMounted(async () => {
       Oda eklemek için önce bir oda tipi tanımlayın.
     </p>
 
-    <form v-if="showForm" class="card form editor" @submit.prevent="save">
-      <h2>{{ editingId ? 'Odayı düzenle' : 'Yeni oda' }}</h2>
-      <div class="form-grid">
-        <label class="field">
-          <span>Oda numarası</span>
-          <input v-model.trim="form.roomNumber" required placeholder="101" />
-        </label>
-        <label class="field">
-          <span>Oda tipi</span>
-          <select v-model="form.roomType" required>
-            <option :value="null" disabled>Seçin</option>
-            <option v-for="t in activeRoomTypes" :key="t.id" :value="t.id">{{ t.name }}</option>
-          </select>
-        </label>
-        <label class="field">
-          <span>Kapasite</span>
-          <input :value="selectedType ? `${selectedType.capacity} kişi` : ''" disabled />
-        </label>
-        <label class="field span-all">
-          <span>Açıklama</span>
-          <textarea v-model="form.description" rows="2" />
-        </label>
-        <label class="field field-check">
-          <input v-model="form.active" type="checkbox" />
-          <span>Aktif</span>
-        </label>
-      </div>
-      <p class="muted hint">Kapasite, seçilen oda tipinden otomatik alınır.</p>
-      <div class="form-actions">
-        <button type="button" class="btn btn-secondary" @click="showForm = false">Vazgeç</button>
-        <button type="submit" class="btn btn-primary" :disabled="saving">
-          {{ saving ? 'Kaydediliyor…' : 'Kaydet' }}
-        </button>
-      </div>
-    </form>
+    <dialog
+      ref="dialog"
+      class="card modal"
+      aria-labelledby="room-form-title"
+      @close="showForm = false"
+      @click.self="showForm = false"
+    >
+      <form class="form" @submit.prevent="save">
+        <h2 id="room-form-title">{{ editingId ? 'Odayı düzenle' : 'Yeni oda' }}</h2>
+        <div v-if="formError" class="alert alert-error" role="alert">{{ formError }}</div>
+        <div class="form-grid">
+          <label class="field">
+            <span>Oda numarası</span>
+            <input v-model.trim="form.roomNumber" required placeholder="101" />
+          </label>
+          <label class="field">
+            <span>Oda tipi</span>
+            <select v-model="form.roomType" required>
+              <option :value="null" disabled>Seçin</option>
+              <option v-for="t in activeRoomTypes" :key="t.id" :value="t.id">{{ t.name }}</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Kapasite</span>
+            <input :value="selectedType ? `${selectedType.capacity} kişi` : ''" disabled />
+          </label>
+          <label class="field span-all">
+            <span>Açıklama</span>
+            <textarea v-model="form.description" rows="2" />
+          </label>
+          <label class="field field-check">
+            <input v-model="form.active" type="checkbox" />
+            <span>Aktif</span>
+          </label>
+        </div>
+        <p class="muted hint">Kapasite, seçilen oda tipinden otomatik alınır.</p>
+        <div class="form-actions">
+          <button type="button" class="btn btn-secondary" @click="showForm = false">Vazgeç</button>
+          <button type="submit" class="btn btn-primary" :disabled="saving">
+            {{ saving ? 'Kaydediliyor…' : 'Kaydet' }}
+          </button>
+        </div>
+      </form>
+    </dialog>
 
     <div class="card table-wrap">
       <p v-if="loading" class="empty-state">Yükleniyor…</p>
@@ -218,12 +238,28 @@ onMounted(async () => {
   align-items: center;
 }
 
-.alert,
-.editor {
+.alert {
   margin-bottom: 1rem;
 }
 
-.editor h2 {
+.modal {
+  width: min(640px, calc(100vw - 2rem));
+  max-height: calc(100vh - 2rem);
+  overflow: auto;
+  padding: 0;
+  color: var(--color-text);
+}
+
+/* Dolgu formda: dialog'un kendisine tıklama yalnızca backdrop'ta olsun */
+.modal > form {
+  padding: 1.5rem;
+}
+
+.modal::backdrop {
+  background: rgb(0 0 0 / 0.45);
+}
+
+.modal h2 {
   font-size: 1.125rem;
 }
 

@@ -1,20 +1,12 @@
-import { test, expect, Page } from '@playwright/test'
+import { test, expect } from '@playwright/test'
 
 test.describe('Frontend', () => {
-  let page: Page
+  test('serves the Vue app on the homepage', async ({ page }) => {
+    await page.goto('http://localhost:630')
 
-  test.beforeAll(async ({ browser }, testInfo) => {
-    const context = await browser.newContext()
-    page = await context.newPage()
-  })
-
-  test('can go on homepage', async ({ page }) => {
-    await page.goto('http://localhost:3000')
-
-    await expect(page).toHaveTitle(/Payload Blank Template/)
-
-    const heading = page.locator('h1').first()
-
-    await expect(heading).toHaveText('Welcome to your new project.')
+    // Oturum yokken Vue router giriş sayfasına yönlendirir.
+    await expect(page).toHaveURL(/\/login/)
+    await expect(page).toHaveTitle(/Vumre/)
+    await expect(page.getByRole('button', { name: 'Giriş yap' })).toBeVisible()
   })
 })

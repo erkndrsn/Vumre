@@ -1,4 +1,4 @@
-import type { Currency, Gender, Room, RoomStatus, RoomType } from '@/types/payload'
+import type { Currency, FlightPoint, Gender, Room, RoomStatus, RoomType } from '@/types/payload'
 
 export const CURRENCIES: Currency[] = ['USD', 'EUR', 'SAR', 'TRY']
 
@@ -29,9 +29,10 @@ export function formatDate(value: string | null | undefined) {
   return value ? new Date(value).toLocaleDateString('tr-TR') : '—'
 }
 
-/** "3/3" gibi doluluk metni. */
+/** "3/3" gibi doluluk metni; odada bebek varsa "3/3 + 1 bebek". */
 export function occupancyText(room: Room) {
-  return `${room.occupied ?? 0}/${room.capacity ?? 0}`
+  const text = `${room.occupied ?? 0}/${room.capacity ?? 0}`
+  return room.infants ? `${text} + ${room.infants} bebek` : text
 }
 
 export function freeBeds(room: Room) {
@@ -46,4 +47,41 @@ export function roomStatusText(room: Room) {
 
 export function roomTypeOf(room: Room): RoomType | null {
   return typeof room.roomType === 'object' ? room.roomType : null
+}
+
+export const MAX_BULK_ROOMS = 500
+
+/**
+ * "101"–"120" aralığını oda numaralarına açar. Başlangıç baştaki sıfırlarla yazılırsa
+ * ("01") aynı genişlik korunur. Önek/sonek her numaraya eklenir (ör. "A-101").
+ */
+export function expandRoomRange(
+  from: string,
+  to: string,
+  prefix = '',
+  suffix = '',
+): { numbers: string[]; error?: string } {
+  const start = from.trim()
+  const end = to.trim()
+  if (!/^\d+$/.test(start) || !/^\d+$/.test(end)) {
+    return { numbers: [], error: 'Başlangıç ve bitiş sayı olmalıdır.' }
+  }
+  const a = Number(start)
+  const b = Number(end)
+  if (a > b) return { numbers: [], error: 'Bitiş, başlangıçtan küçük olamaz.' }
+  if (b - a + 1 > MAX_BULK_ROOMS) {
+    return { numbers: [], error: `Tek seferde en fazla ${MAX_BULK_ROOMS} oda oluşturulabilir.` }
+  }
+  const width = start.startsWith('0') ? start.length : 0
+  const numbers: string[] = []
+  for (let n = a; n <= b; n++) {
+    numbers.push(`${prefix.trim()}${String(n).padStart(width, '0')}${suffix.trim()}`)
+  }
+  return { numbers }
+}
+
+/** Uçuş noktasının kısa adı: "İzmir (ADB)". */
+export function flightPointLabel(point: FlightPoint | number | null | undefined): string | null {
+  if (!point || typeof point !== 'object') return null
+  return point.airportCode ? `${point.city} (${point.airportCode})` : point.city
 }

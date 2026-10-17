@@ -69,9 +69,17 @@ export interface Config {
   collections: {
     users: User;
     media: Media;
+    'flight-points': FlightPoint;
+    regions: Region;
     'room-types': RoomType;
     rooms: Room;
     pilgrims: Pilgrim;
+    'pilgrim-documents': PilgrimDocument;
+    'payment-groups': PaymentGroup;
+    cashboxes: Cashbox;
+    payments: Payment;
+    expenses: Expense;
+    'cash-transfers': CashTransfer;
     'payload-kv': PayloadKv;
     'payload-locked-documents': PayloadLockedDocument;
     'payload-preferences': PayloadPreference;
@@ -81,13 +89,27 @@ export interface Config {
     rooms: {
       occupants: 'pilgrims';
     };
+    pilgrims: {
+      payments: 'payments';
+    };
+    'payment-groups': {
+      members: 'pilgrims';
+    };
   };
   collectionsSelect: {
     users: UsersSelect<false> | UsersSelect<true>;
     media: MediaSelect<false> | MediaSelect<true>;
+    'flight-points': FlightPointsSelect<false> | FlightPointsSelect<true>;
+    regions: RegionsSelect<false> | RegionsSelect<true>;
     'room-types': RoomTypesSelect<false> | RoomTypesSelect<true>;
     rooms: RoomsSelect<false> | RoomsSelect<true>;
     pilgrims: PilgrimsSelect<false> | PilgrimsSelect<true>;
+    'pilgrim-documents': PilgrimDocumentsSelect<false> | PilgrimDocumentsSelect<true>;
+    'payment-groups': PaymentGroupsSelect<false> | PaymentGroupsSelect<true>;
+    cashboxes: CashboxesSelect<false> | CashboxesSelect<true>;
+    payments: PaymentsSelect<false> | PaymentsSelect<true>;
+    expenses: ExpensesSelect<false> | ExpensesSelect<true>;
+    'cash-transfers': CashTransfersSelect<false> | CashTransfersSelect<true>;
     'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
     'payload-locked-documents': PayloadLockedDocumentsSelect<false> | PayloadLockedDocumentsSelect<true>;
     'payload-preferences': PayloadPreferencesSelect<false> | PayloadPreferencesSelect<true>;
@@ -111,20 +133,18 @@ export interface Config {
 }
 export interface UserAuthOperations {
   forgotPassword: {
-    email: string;
-    password: string;
+    username: string;
   };
   login: {
-    email: string;
     password: string;
+    username: string;
   };
   registerFirstUser: {
-    email: string;
     password: string;
+    username: string;
   };
   unlock: {
-    email: string;
-    password: string;
+    username: string;
   };
 }
 /**
@@ -133,9 +153,16 @@ export interface UserAuthOperations {
  */
 export interface User {
   id: number;
+  name?: string | null;
+  role?: ('admin' | 'regionManager') | null;
+  /**
+   * Bölge yöneticisi yalnızca bu bölgelerdeki umrecileri görür ve düzenler.
+   */
+  regions?: (number | Region)[] | null;
   updatedAt: string;
   createdAt: string;
-  email: string;
+  email?: string | null;
+  username: string;
   resetPasswordToken?: string | null;
   resetPasswordExpiration?: string | null;
   salt?: string | null;
@@ -152,6 +179,46 @@ export interface User {
     | null;
   password?: string | null;
   collection: 'users';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "regions".
+ */
+export interface Region {
+  id: number;
+  name: string;
+  /**
+   * Bu bölgeden kaydedilen umrecilere varsayılan olarak atanır. Havalimanı olmayan bölgeler için en yakın nokta seçilir (ör. Aydın → İzmir).
+   */
+  defaultFlightPoint?: (number | null) | FlightPoint;
+  description?: string | null;
+  active?: boolean | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "flight-points".
+ */
+export interface FlightPoint {
+  id: number;
+  /**
+   * Ör. İzmir Adnan Menderes Havalimanı
+   */
+  name: string;
+  city: string;
+  /**
+   * IATA kodu, ör. ADB, ASR, IST
+   */
+  airportCode?: string | null;
+  /**
+   * Genel uçuşun kalktığı nokta (ör. İstanbul). Diğer noktalardan buraya aktarmalı gelinir. Yalnızca bir nokta ana olabilir.
+   */
+  isMain?: boolean | null;
+  description?: string | null;
+  active?: boolean | null;
+  updatedAt: string;
+  createdAt: string;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -180,8 +247,32 @@ export interface RoomType {
   id: number;
   name: string;
   capacity: number;
+  /**
+   * Aşağıdaki çocuk yaş aralıklarına girmeyen herkese uygulanır.
+   */
   pricePerPerson: number;
+  /**
+   * Yaşlar tamamlanmış yaştır ve iki uç dahildir (ör. 2-6 → 2 ile 6 yaş arası). Yaş, odaya atama tarihindeki doğum tarihine göre hesaplanır.
+   */
+  childPrices?:
+    | {
+        minAge: number;
+        maxAge: number;
+        price: number;
+        id?: string | null;
+      }[]
+    | null;
   currency: 'USD' | 'EUR' | 'SAR' | 'TRY';
+  /**
+   * Ödeme bu para birimlerinde de alınabilir. Borç ana para biriminde tutulur; diğer para birimindeki ödeme, ücretlerin oranıyla borçtan düşülür. Çocuk ücretlerine de aynı oran uygulanır.
+   */
+  otherPrices?:
+    | {
+        currency: 'USD' | 'EUR' | 'SAR' | 'TRY';
+        pricePerPerson: number;
+        id?: string | null;
+      }[]
+    | null;
   description?: string | null;
   active?: boolean | null;
   updatedAt: string;
@@ -199,7 +290,14 @@ export interface Room {
    * Oda tipinden otomatik alınır.
    */
   capacity?: number | null;
+  /**
+   * Bebekler (0-1 yaş) yatak saymaz.
+   */
   occupied?: number | null;
+  /**
+   * Kapasiteye sayılmayan 0-1 yaş umreciler.
+   */
+  infants?: number | null;
   status?: ('empty' | 'partial' | 'full') | null;
   active?: boolean | null;
   description?: string | null;
@@ -225,14 +323,201 @@ export interface Pilgrim {
   phone?: string | null;
   birthDate?: string | null;
   gender: 'male' | 'female';
+  region?: (number | null) | Region;
+  /**
+   * Kişinin uçağa bineceği havalimanı. Boş bırakılırsa bölgenin uçuş noktası atanır.
+   */
+  flightPoint?: (number | null) | FlightPoint;
   address?: string | null;
   description?: string | null;
   room?: (number | null) | Room;
   /**
-   * Odaya atandığında oda tipinin kişi başı ücretinden alınır.
+   * Aile gibi birlikte ödeme yapan kişiler; borç ve tahsilat grup toplamı üzerinden izlenir.
+   */
+  paymentGroup?: (number | null) | PaymentGroup;
+  /**
+   * Odaya atandığında oda tipinden alınır; doğum tarihine göre çocuk yaş aralığına giriyorsa çocuk ücreti uygulanır.
    */
   roomPrice?: number | null;
   roomCurrency?: string | null;
+  /**
+   * Oda tipinden alınır; ödeme bu para birimlerinde de yapılabilir.
+   */
+  roomOtherPrices?:
+    | {
+        currency: string;
+        price: number;
+        id?: string | null;
+      }[]
+    | null;
+  /**
+   * Arşive taşınan kişi odasından çıkarılır; oda yerleşiminde, panoda ve listelerde görünmez.
+   */
+  archived?: boolean | null;
+  archivedAt?: string | null;
+  archiveReason?: string | null;
+  payments?: {
+    docs?: (number | Payment)[];
+    hasNextPage?: boolean;
+    totalDocs?: number;
+  };
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "payment-groups".
+ */
+export interface PaymentGroup {
+  id: number;
+  name: string;
+  /**
+   * Borç hatırlatmaları bu kişiye gönderilir.
+   */
+  responsible?: (number | null) | Pilgrim;
+  note?: string | null;
+  members?: {
+    docs?: (number | Pilgrim)[];
+    hasNextPage?: boolean;
+    totalDocs?: number;
+  };
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "payments".
+ */
+export interface Payment {
+  id: number;
+  /**
+   * Odası belli değilse tahsilat ön ödeme olarak alınır; odaya atanınca ücretten düşülür.
+   */
+  pilgrim: number | Pilgrim;
+  amount: number;
+  /**
+   * Boş bırakılırsa kasanın para birimi. Oda tipinde fiyatı girilmiş diğer para birimleriyle de ödeme alınabilir.
+   */
+  currency?: ('USD' | 'EUR' | 'SAR' | 'TRY') | null;
+  /**
+   * Paranın girdiği kasa; para birimi tahsilatla aynı olmalı.
+   */
+  cashbox?: (number | null) | Cashbox;
+  /**
+   * Farklı para birimindeki ödeme, oda ücretlerinin oranıyla çevrilir.
+   */
+  debtAmount?: number | null;
+  debtCurrency?: string | null;
+  paidAt: string;
+  /**
+   * Kasanın türünden gelir.
+   */
+  method: 'cash' | 'transfer' | 'card';
+  receiptNo?: string | null;
+  note?: string | null;
+  receivedBy?: (number | null) | User;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "cashboxes".
+ */
+export interface Cashbox {
+  id: number;
+  name: string;
+  /**
+   * Hareketi olan kasanın para birimi değiştirilemez.
+   */
+  currency: 'USD' | 'EUR' | 'SAR' | 'TRY';
+  kind: 'cash' | 'transfer' | 'card';
+  /**
+   * Pasif kasaya yeni tahsilat, ödeme veya virman girilemez.
+   */
+  active?: boolean | null;
+  note?: string | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "pilgrim-documents".
+ */
+export interface PilgrimDocument {
+  id: number;
+  pilgrim: number | Pilgrim;
+  kind: 'idCard' | 'other';
+  note?: string | null;
+  updatedAt: string;
+  createdAt: string;
+  url?: string | null;
+  thumbnailURL?: string | null;
+  filename?: string | null;
+  mimeType?: string | null;
+  filesize?: number | null;
+  width?: number | null;
+  height?: number | null;
+  focalX?: number | null;
+  focalY?: number | null;
+  sizes?: {
+    thumbnail?: {
+      url?: string | null;
+      width?: number | null;
+      height?: number | null;
+      mimeType?: string | null;
+      filesize?: number | null;
+      filename?: string | null;
+    };
+  };
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "expenses".
+ */
+export interface Expense {
+  id: number;
+  description: string;
+  category: 'hotel' | 'flight' | 'transport' | 'visa' | 'food' | 'guide' | 'other';
+  payee?: string | null;
+  /**
+   * Paranın çıktığı kasa.
+   */
+  cashbox?: (number | null) | Cashbox;
+  amount: number;
+  /**
+   * Kaydederken kasanın para birimi yazılır.
+   */
+  currency: 'USD' | 'EUR' | 'SAR' | 'TRY';
+  paidAt: string;
+  /**
+   * Kasanın türünden gelir.
+   */
+  method: 'cash' | 'transfer' | 'card';
+  receiptNo?: string | null;
+  note?: string | null;
+  paidBy?: (number | null) | User;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "cash-transfers".
+ */
+export interface CashTransfer {
+  id: number;
+  from: number | Cashbox;
+  to: number | Cashbox;
+  /**
+   * Kaynak kasanın para biriminde.
+   */
+  amount: number;
+  /**
+   * Hedef kasanın para biriminde. Dövizler aynıysa boş bırakın; çıkan tutar yazılır.
+   */
+  toAmount?: number | null;
+  transferredAt: string;
+  note?: string | null;
+  createdBy?: (number | null) | User;
   updatedAt: string;
   createdAt: string;
 }
@@ -269,6 +554,14 @@ export interface PayloadLockedDocument {
         value: number | Media;
       } | null)
     | ({
+        relationTo: 'flight-points';
+        value: number | FlightPoint;
+      } | null)
+    | ({
+        relationTo: 'regions';
+        value: number | Region;
+      } | null)
+    | ({
         relationTo: 'room-types';
         value: number | RoomType;
       } | null)
@@ -279,6 +572,30 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'pilgrims';
         value: number | Pilgrim;
+      } | null)
+    | ({
+        relationTo: 'pilgrim-documents';
+        value: number | PilgrimDocument;
+      } | null)
+    | ({
+        relationTo: 'payment-groups';
+        value: number | PaymentGroup;
+      } | null)
+    | ({
+        relationTo: 'cashboxes';
+        value: number | Cashbox;
+      } | null)
+    | ({
+        relationTo: 'payments';
+        value: number | Payment;
+      } | null)
+    | ({
+        relationTo: 'expenses';
+        value: number | Expense;
+      } | null)
+    | ({
+        relationTo: 'cash-transfers';
+        value: number | CashTransfer;
       } | null);
   globalSlug?: string | null;
   user: {
@@ -327,9 +644,13 @@ export interface PayloadMigration {
  * via the `definition` "users_select".
  */
 export interface UsersSelect<T extends boolean = true> {
+  name?: T;
+  role?: T;
+  regions?: T;
   updatedAt?: T;
   createdAt?: T;
   email?: T;
+  username?: T;
   resetPasswordToken?: T;
   resetPasswordExpiration?: T;
   salt?: T;
@@ -365,13 +686,54 @@ export interface MediaSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "flight-points_select".
+ */
+export interface FlightPointsSelect<T extends boolean = true> {
+  name?: T;
+  city?: T;
+  airportCode?: T;
+  isMain?: T;
+  description?: T;
+  active?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "regions_select".
+ */
+export interface RegionsSelect<T extends boolean = true> {
+  name?: T;
+  defaultFlightPoint?: T;
+  description?: T;
+  active?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "room-types_select".
  */
 export interface RoomTypesSelect<T extends boolean = true> {
   name?: T;
   capacity?: T;
   pricePerPerson?: T;
+  childPrices?:
+    | T
+    | {
+        minAge?: T;
+        maxAge?: T;
+        price?: T;
+        id?: T;
+      };
   currency?: T;
+  otherPrices?:
+    | T
+    | {
+        currency?: T;
+        pricePerPerson?: T;
+        id?: T;
+      };
   description?: T;
   active?: T;
   updatedAt?: T;
@@ -386,6 +748,7 @@ export interface RoomsSelect<T extends boolean = true> {
   roomType?: T;
   capacity?: T;
   occupied?: T;
+  infants?: T;
   status?: T;
   active?: T;
   description?: T;
@@ -406,11 +769,137 @@ export interface PilgrimsSelect<T extends boolean = true> {
   phone?: T;
   birthDate?: T;
   gender?: T;
+  region?: T;
+  flightPoint?: T;
   address?: T;
   description?: T;
   room?: T;
+  paymentGroup?: T;
   roomPrice?: T;
   roomCurrency?: T;
+  roomOtherPrices?:
+    | T
+    | {
+        currency?: T;
+        price?: T;
+        id?: T;
+      };
+  archived?: T;
+  archivedAt?: T;
+  archiveReason?: T;
+  payments?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "pilgrim-documents_select".
+ */
+export interface PilgrimDocumentsSelect<T extends boolean = true> {
+  pilgrim?: T;
+  kind?: T;
+  note?: T;
+  updatedAt?: T;
+  createdAt?: T;
+  url?: T;
+  thumbnailURL?: T;
+  filename?: T;
+  mimeType?: T;
+  filesize?: T;
+  width?: T;
+  height?: T;
+  focalX?: T;
+  focalY?: T;
+  sizes?:
+    | T
+    | {
+        thumbnail?:
+          | T
+          | {
+              url?: T;
+              width?: T;
+              height?: T;
+              mimeType?: T;
+              filesize?: T;
+              filename?: T;
+            };
+      };
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "payment-groups_select".
+ */
+export interface PaymentGroupsSelect<T extends boolean = true> {
+  name?: T;
+  responsible?: T;
+  note?: T;
+  members?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "cashboxes_select".
+ */
+export interface CashboxesSelect<T extends boolean = true> {
+  name?: T;
+  currency?: T;
+  kind?: T;
+  active?: T;
+  note?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "payments_select".
+ */
+export interface PaymentsSelect<T extends boolean = true> {
+  pilgrim?: T;
+  amount?: T;
+  currency?: T;
+  cashbox?: T;
+  debtAmount?: T;
+  debtCurrency?: T;
+  paidAt?: T;
+  method?: T;
+  receiptNo?: T;
+  note?: T;
+  receivedBy?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "expenses_select".
+ */
+export interface ExpensesSelect<T extends boolean = true> {
+  description?: T;
+  category?: T;
+  payee?: T;
+  cashbox?: T;
+  amount?: T;
+  currency?: T;
+  paidAt?: T;
+  method?: T;
+  receiptNo?: T;
+  note?: T;
+  paidBy?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "cash-transfers_select".
+ */
+export interface CashTransfersSelect<T extends boolean = true> {
+  from?: T;
+  to?: T;
+  amount?: T;
+  toAmount?: T;
+  transferredAt?: T;
+  note?: T;
+  createdBy?: T;
   updatedAt?: T;
   createdAt?: T;
 }

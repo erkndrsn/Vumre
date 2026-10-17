@@ -1,7 +1,16 @@
 {
   "extends": "@vue/tsconfig/tsconfig.dom.json",
   "include": ["env.d.ts", "src/**/*", "src/**/*.vue"],
-  "exclude": ["src/**/__tests__/*"],
+  // src/ Payload (Next.js) ile ortak: sunucu ve Payload admin (React) dosyaları Vue uygulamasına dahil değil.
+  "exclude": [
+    "src/**/__tests__/*",
+    "src/app/**",
+    "src/collections/**",
+    "src/components/**",
+    "src/lib/**",
+    "src/payload.config.ts",
+    "src/payload-types.ts"
+  ],
   "compilerOptions": {
     // Extra safety for array and object lookups, but may have false positives.
     "noUncheckedIndexedAccess": true,

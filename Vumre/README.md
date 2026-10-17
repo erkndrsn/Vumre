@@ -20,7 +20,15 @@ After you click the `Deploy` button above, you'll want to have standalone copy o
 2. `cd my-project && cp .env.example .env` to copy the example environment variables. You'll need to add the `MONGODB_URL` from your Cloud project to your `.env` if you want to use S3 storage and the MongoDB database that was created for you.
 
 3. `pnpm install && pnpm dev` to install dependencies and start the dev server
-4. open `http://localhost:3000` to open the app in your browser
+4. open `http://localhost:630` to open the app in your browser
+
+Her şey tek porttan (630) çalışır:
+
+- `/` ve diğer sayfalar → Vue arayüzü
+- `/admin` → Payload yönetim paneli
+- `/api` → Payload REST/GraphQL API
+
+Geliştirmede `pnpm dev`, Vite'ı 630'da (Vue, hot reload ile) ve Next/Payload'u arka planda 631'de başlatır; Vite `/api`, `/admin` ve `/_next` isteklerini 631'e proxy'ler. Production'da `pnpm build` önce Vue arayüzünü `public/` içine derler, ardından `pnpm start` Next üzerinden hepsini 630'da sunar.
 
 That's it! Changes made in `./src` will be reflected in your app. Follow the on-screen instructions to login and create your first admin user. Then check out [Production](#production) once you're ready to build and serve your app, and [Deployment](#deployment) when you're ready to go live.
 

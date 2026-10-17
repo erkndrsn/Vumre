@@ -1,16 +1,34 @@
 import { APIError, ValidationError, type CollectionConfig } from 'payload'
 
-import { ROOM_STATUS_OPTIONS, countOccupants, relationId, roomStatus } from '../lib/rooms'
+import { adminOnlyAccess } from '../lib/access'
+import { bulkCreateRoomsEndpoint, roomBoardEndpoint } from '../lib/roomBoard'
+import {
+  ROOM_STATUS_OPTIONS,
+  countOccupants,
+  relationId,
+  roomOccupancy,
+  roomStatus,
+} from '../lib/rooms'
 
 export const Rooms: CollectionConfig = {
   slug: 'rooms',
   labels: { singular: 'Oda', plural: 'Odalar' },
+  access: adminOnlyAccess,
   admin: {
     useAsTitle: 'roomNumber',
     group: 'Konaklama',
-    defaultColumns: ['roomNumber', 'roomType', 'capacity', 'occupied', 'status', 'active'],
+    defaultColumns: [
+      'roomNumber',
+      'roomType',
+      'capacity',
+      'occupied',
+      'infants',
+      'status',
+      'active',
+    ],
   },
   defaultSort: 'roomNumber',
+  endpoints: [roomBoardEndpoint, bulkCreateRoomsEndpoint],
   fields: [
     { name: 'roomNumber', label: 'Oda numarası', type: 'text', required: true, unique: true },
     {
@@ -33,7 +51,14 @@ export const Rooms: CollectionConfig = {
       label: 'Dolu yatak',
       type: 'number',
       virtual: true,
-      admin: { readOnly: true },
+      admin: { readOnly: true, description: 'Bebekler (0-1 yaş) yatak saymaz.' },
+    },
+    {
+      name: 'infants',
+      label: 'Bebek',
+      type: 'number',
+      virtual: true,
+      admin: { readOnly: true, description: 'Kapasiteye sayılmayan 0-1 yaş umreciler.' },
     },
     {
       name: 'status',
@@ -85,19 +110,22 @@ export const Rooms: CollectionConfig = {
       },
     ],
     afterRead: [
-      async ({ doc, req }) => {
-        const occupied = await countOccupants(req, doc.id)
+      async ({ doc, req, context }) => {
+        // Toplu doluluk hesabı yapan sorgular (findFullRoomIds) oda başına sayım istemez.
+        if (context.skipOccupancy) return doc
+        const { occupied, infants } = await roomOccupancy(req, doc.id)
         doc.occupied = occupied
+        doc.infants = infants
         doc.status = roomStatus(occupied, doc.capacity ?? 0)
         return doc
       },
     ],
     beforeDelete: [
       async ({ id, req }) => {
-        const occupied = await countOccupants(req, id)
-        if (occupied > 0) {
+        const { total } = await roomOccupancy(req, id)
+        if (total > 0) {
           throw new APIError(
-            `Odada ${occupied} umreci var. Silmeden önce umrecileri başka odaya taşıyın.`,
+            `Odada ${total} umreci var. Silmeden önce umrecileri başka odaya taşıyın.`,
             400,
             null,
             true,

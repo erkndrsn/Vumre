@@ -8,5 +8,7 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['./vitest.setup.ts'],
     include: ['tests/int/**/*.int.spec.ts'],
+    // Tüm entegrasyon testleri aynı SQLite dosyasını kullanır; paralel dosyalar kilitlenir.
+    fileParallelism: false,
   },
 })

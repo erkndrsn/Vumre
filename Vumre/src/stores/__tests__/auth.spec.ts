@@ -6,7 +6,7 @@ import { ApiError } from '@/api/client'
 
 vi.mock('@/api/auth')
 
-const user = { id: 1, email: 'test@example.com', createdAt: '', updatedAt: '' }
+const user = { id: 1, username: 'test', email: 'test@example.com', createdAt: '', updatedAt: '' }
 
 describe('auth store', () => {
   beforeEach(() => {
@@ -22,7 +22,7 @@ describe('auth store', () => {
     await store.fetchMe()
 
     expect(store.isAuthenticated).toBe(true)
-    expect(store.user?.email).toBe('test@example.com')
+    expect(store.user?.username).toBe('test')
     expect(authApi.me).toHaveBeenCalledOnce()
   })
 
@@ -40,9 +40,9 @@ describe('auth store', () => {
     vi.mocked(authApi.login).mockResolvedValue({ user })
     const store = useAuthStore()
 
-    await store.login('test@example.com', 'secret')
+    await store.login('test', 'secret')
 
-    expect(authApi.login).toHaveBeenCalledWith('test@example.com', 'secret')
+    expect(authApi.login).toHaveBeenCalledWith('test', 'secret')
     expect(store.isAuthenticated).toBe(true)
   })
 
@@ -50,7 +50,7 @@ describe('auth store', () => {
     vi.mocked(authApi.login).mockResolvedValue({ user })
     vi.mocked(authApi.logout).mockRejectedValue(new ApiError('down', 0))
     const store = useAuthStore()
-    await store.login('test@example.com', 'secret')
+    await store.login('test', 'secret')
 
     await expect(store.logout()).rejects.toBeInstanceOf(ApiError)
 

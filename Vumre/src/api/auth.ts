@@ -4,10 +4,10 @@ import { request } from './client'
 const collection = import.meta.env.VITE_PAYLOAD_AUTH_COLLECTION || 'users'
 const base = `/${collection}`
 
-export function login(email: string, password: string) {
-  return request<LoginResponse>(`${base}/login`, {
+export function login(username: string, password: string) {
+  return request<LoginResponse>(`/login`, {
     method: 'POST',
-    body: { email, password },
+    body: { username, password },
     skipUnauthorizedHandler: true,
   })
 }
@@ -30,10 +30,10 @@ export function refreshToken() {
   )
 }
 
-export function forgotPassword(email: string) {
+export function forgotPassword(username: string) {
   return request<{ message: string }>(`${base}/forgot-password`, {
     method: 'POST',
-    body: { email },
+    body: { username },
     skipUnauthorizedHandler: true,
   })
 }

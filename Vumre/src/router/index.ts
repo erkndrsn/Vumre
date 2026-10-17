@@ -8,6 +8,8 @@ declare module 'vue-router' {
     /** true ise giriş yapmadan erişilebilir. Varsayılan: tüm sayfalar korumalı. */
     public?: boolean
     title?: string
+    /** true ise bölge yöneticisi de girebilir. Varsayılan: sayfa yalnızca admine açık. */
+    regionManager?: boolean
   }
 }
 
@@ -52,13 +54,73 @@ const router = createRouter({
           path: 'umreciler/yeni',
           name: 'pilgrim-new',
           component: () => import('@/views/PilgrimFormView.vue'),
-          meta: { title: 'Yeni umreci' },
+          meta: { title: 'Yeni umreci', regionManager: true },
+        },
+        {
+          path: 'umreciler/bolge-listesi',
+          name: 'pilgrims-by-region',
+          component: () => import('@/views/RegionalPilgrimsView.vue'),
+          meta: { title: 'Bölge Listesi', regionManager: true },
         },
         {
           path: 'umreciler/:id(\\d+)',
           name: 'pilgrim-edit',
           component: () => import('@/views/PilgrimFormView.vue'),
-          meta: { title: 'Umreci' },
+          meta: { title: 'Umreci', regionManager: true },
+        },
+        {
+          path: 'yerlesim',
+          name: 'room-board',
+          component: () => import('@/views/RoomBoardView.vue'),
+          meta: { title: 'Oda Yerleşimi' },
+        },
+        {
+          path: 'tahsilat',
+          name: 'payments',
+          component: () => import('@/views/PaymentsView.vue'),
+          meta: { title: 'Tahsilat' },
+        },
+        {
+          path: 'odeme-takibi',
+          name: 'debts',
+          component: () => import('@/views/DebtsView.vue'),
+          meta: { title: 'Ödeme Takibi' },
+        },
+        {
+          path: 'odeme-gruplari',
+          name: 'payment-groups',
+          component: () => import('@/views/PaymentGroupsView.vue'),
+          meta: { title: 'Ödeme Grupları' },
+        },
+        {
+          path: 'kasa',
+          name: 'cash',
+          component: () => import('@/views/CashView.vue'),
+          meta: { title: 'Kasa' },
+        },
+        {
+          path: 'kasa/:id',
+          name: 'cashbox-ledger',
+          component: () => import('@/views/CashboxLedgerView.vue'),
+          meta: { title: 'Kasa Dökümü' },
+        },
+        {
+          path: 'bolgeler',
+          name: 'regions',
+          component: () => import('@/views/RegionsView.vue'),
+          meta: { title: 'Bölgeler' },
+        },
+        {
+          path: 'bolge-yoneticileri',
+          name: 'region-managers',
+          component: () => import('@/views/RegionManagersView.vue'),
+          meta: { title: 'Bölge Yöneticileri' },
+        },
+        {
+          path: 'ucus-noktalari',
+          name: 'flight-points',
+          component: () => import('@/views/FlightPointsView.vue'),
+          meta: { title: 'Uçuş Noktaları' },
         },
         {
           path: 'odalar',
@@ -76,7 +138,7 @@ const router = createRouter({
           path: ':pathMatch(.*)*',
           name: 'not-found',
           component: () => import('@/views/NotFoundView.vue'),
-          meta: { title: 'Sayfa bulunamadı' },
+          meta: { title: 'Sayfa bulunamadı', regionManager: true },
         },
       ],
     },
@@ -93,7 +155,11 @@ router.beforeEach(async (to) => {
     return { name: 'login', query: to.fullPath !== '/' ? { redirect: to.fullPath } : {} }
   }
   if (auth.isAuthenticated && GUEST_ONLY.has(to.name as string)) {
-    return { name: 'dashboard' }
+    return auth.isAdmin ? { name: 'dashboard' } : { name: 'pilgrims-by-region' }
+  }
+  // Bölge yöneticisi yalnızca bölge listesine ve umreci düzenlemeye girer.
+  if (auth.isAuthenticated && !auth.isAdmin && !to.meta.public && !to.meta.regionManager) {
+    return { name: 'pilgrims-by-region' }
   }
 })
 

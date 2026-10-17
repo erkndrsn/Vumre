@@ -78,3 +78,35 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
 
   return data as T
 }
+
+/**
+ * Dosya döndüren bir GET isteğini indirir. Hata yanıtı (JSON) dosya olarak inmesin diye
+ * önce durum kontrol edilir; hata mesajı ApiError olarak fırlatılır.
+ */
+export async function download(path: string, fallbackName: string): Promise<void> {
+  let response: Response
+  try {
+    response = await fetch(`${API_BASE}${path}`, { credentials: 'include' })
+  } catch {
+    throw new ApiError('Sunucuya ulaşılamadı. Bağlantınızı kontrol edin.', 0)
+  }
+  if (!response.ok) {
+    const data = (await response.json().catch(() => null)) as PayloadErrorResponse | null
+    if (response.status === 401) unauthorizedHandler?.()
+    throw new ApiError(
+      data?.errors?.[0]?.message || data?.message || `İndirme başarısız (${response.status}).`,
+      response.status,
+      data,
+    )
+  }
+  const name =
+    response.headers.get('Content-Disposition')?.match(/filename="?([^";]+)"?/)?.[1] || fallbackName
+  const url = URL.createObjectURL(await response.blob())
+  const link = document.createElement('a')
+  link.href = url
+  link.download = name
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(url)
+}

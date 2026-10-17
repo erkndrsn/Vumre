@@ -48,3 +48,15 @@ node_modules/
 /playwright-report/
 /blob-report/
 /playwright/.cache/
+
+# Yerel SQLite veritabanı (WAL dosyaları dahil)
+*.db
+*.db-shm
+*.db-wal
+
+# Vue arayüzünün build çıktısı (npm run build:web)
+/public/index.html
+/public/spa/
+
+# Umreci kimlik/doküman yüklemeleri (kişisel veri)
+/uploads

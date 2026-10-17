@@ -113,6 +113,11 @@ svg {
 
     h1 {
       text-align: center;
+      margin-bottom: 0;
+    }
+
+    .lead {
+      opacity: 0.7;
     }
   }
 
@@ -132,12 +137,6 @@ svg {
       background: rgb(1000, 1000, 1000);
       border: 1px solid rgb(0, 0, 0);
     }
-
-    .docs {
-      color: rgb(1000, 1000, 1000);
-      background: rgb(0, 0, 0);
-      border: 1px solid rgb(1000, 1000, 1000);
-    }
   }
 
   .footer {
@@ -152,13 +151,7 @@ svg {
 
     p {
       margin: 0;
-    }
-
-    .codeLink {
-      text-decoration: none;
-      padding: 0 0.5rem;
-      background: rgb(60, 60, 60);
-      border-radius: 4px;
+      opacity: 0.6;
     }
   }
 }

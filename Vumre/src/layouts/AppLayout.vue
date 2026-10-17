@@ -1,11 +1,17 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import { RouterLink, RouterView, useRouter } from 'vue-router'
+import { computed, ref } from 'vue'
+import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 
 const auth = useAuthStore()
 const router = useRouter()
+const route = useRoute()
 const loggingOut = ref(false)
+
+// Bölge listesi de /umreciler altında; o sayfada yalnızca kendi bağlantısı vurgulanır.
+const pilgrimsActive = computed(
+  () => route.path.startsWith('/umreciler') && route.name !== 'pilgrims-by-region',
+)
 
 async function handleLogout() {
   loggingOut.value = true
@@ -25,7 +31,7 @@ async function handleLogout() {
     <header class="topbar">
       <RouterLink to="/" class="brand">Vumre</RouterLink>
       <div class="topbar-user">
-        <span class="user-email">{{ auth.user?.email }}</span>
+        <span class="user-email">{{ auth.user?.name || auth.user?.username }}</span>
         <button class="btn btn-secondary" :disabled="loggingOut" @click="handleLogout">
           Çıkış
         </button>
@@ -34,12 +40,43 @@ async function handleLogout() {
 
     <div class="app-body">
       <nav class="sidebar" aria-label="Ana menü">
-        <RouterLink to="/" class="nav-link" exact-active-class="active">Panel</RouterLink>
-        <RouterLink to="/umreciler" class="nav-link" active-class="active">Umreciler</RouterLink>
-        <RouterLink to="/odalar" class="nav-link" active-class="active">Odalar</RouterLink>
-        <RouterLink to="/oda-tipleri" class="nav-link" active-class="active"
-          >Oda Tipleri</RouterLink
+        <template v-if="auth.isAdmin">
+          <RouterLink to="/" class="nav-link" exact-active-class="active">Panel</RouterLink>
+          <RouterLink
+            to="/umreciler"
+            class="nav-link"
+            active-class=""
+            :class="{ active: pilgrimsActive }"
+            >Umreciler</RouterLink
+          >
+        </template>
+        <RouterLink to="/umreciler/bolge-listesi" class="nav-link" active-class="active"
+          >Bölge Listesi</RouterLink
         >
+        <template v-if="auth.isAdmin">
+          <RouterLink to="/yerlesim" class="nav-link" active-class="active"
+            >Oda Yerleşimi</RouterLink
+          >
+          <RouterLink to="/tahsilat" class="nav-link" active-class="active">Tahsilat</RouterLink>
+          <RouterLink to="/odeme-takibi" class="nav-link" active-class="active"
+            >Ödeme Takibi</RouterLink
+          >
+          <RouterLink to="/odeme-gruplari" class="nav-link" active-class="active"
+            >Ödeme Grupları</RouterLink
+          >
+          <RouterLink to="/kasa" class="nav-link" active-class="active">Kasa</RouterLink>
+          <RouterLink to="/odalar" class="nav-link" active-class="active">Odalar</RouterLink>
+          <RouterLink to="/bolgeler" class="nav-link" active-class="active">Bölgeler</RouterLink>
+          <RouterLink to="/ucus-noktalari" class="nav-link" active-class="active"
+            >Uçuş Noktaları</RouterLink
+          >
+          <RouterLink to="/oda-tipleri" class="nav-link" active-class="active"
+            >Oda Tipleri</RouterLink
+          >
+          <RouterLink to="/bolge-yoneticileri" class="nav-link" active-class="active"
+            >Bölge Yöneticileri</RouterLink
+          >
+        </template>
       </nav>
 
       <main class="content">

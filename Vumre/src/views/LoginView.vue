@@ -9,7 +9,7 @@ const auth = useAuthStore()
 const route = useRoute()
 const router = useRouter()
 
-const email = ref('')
+const username = ref('')
 const password = ref('')
 const loading = ref(false)
 const error = ref('')
@@ -23,12 +23,12 @@ async function handleSubmit() {
   error.value = ''
   loading.value = true
   try {
-    await auth.login(email.value.trim(), password.value)
+    await auth.login(username.value.trim(), password.value)
     await router.replace(safeRedirect(route.query.redirect))
   } catch (e) {
     error.value =
       e instanceof ApiError && e.status === 401
-        ? 'E-posta veya şifre hatalı.'
+        ? 'Kullanıcı adı veya şifre hatalı.'
         : e instanceof Error
           ? e.message
           : 'Giriş yapılamadı.'
@@ -44,10 +44,12 @@ async function handleSubmit() {
       <div v-if="error" class="alert alert-error" role="alert">{{ error }}</div>
 
       <label class="field">
-        <span>E-posta</span>
+        <span>Kullanıcı adı</span>
         <input
-          v-model="email"
-          type="email"
+          v-model="username"
+          type="text"
+          autocapitalize="none"
+          spellcheck="false"
           autocomplete="username"
           required
           autofocus
@@ -69,7 +71,7 @@ async function handleSubmit() {
       <button
         type="submit"
         class="btn btn-primary btn-block"
-        :disabled="loading || !email || !password"
+        :disabled="loading || !username || !password"
       >
         {{ loading ? 'Giriş yapılıyor…' : 'Giriş yap' }}
       </button>
