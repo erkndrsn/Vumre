@@ -5,7 +5,7 @@ const collection = import.meta.env.VITE_PAYLOAD_AUTH_COLLECTION || 'users'
 const base = `/${collection}`
 
 export function login(username: string, password: string) {
-  return request<LoginResponse>(`/login`, {
+  return request<LoginResponse>(`${base}/login`, {
     method: 'POST',
     body: { username, password },
     skipUnauthorizedHandler: true,

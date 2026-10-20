@@ -156,7 +156,7 @@ export interface User {
   name?: string | null;
   role?: ('admin' | 'regionManager') | null;
   /**
-   * Bölge yöneticisi yalnızca bu bölgelerdeki umrecileri görür ve düzenler.
+   * Bölge yöneticisi yalnızca bu bölgelere umreci ekler ve bu bölgelerdekileri düzenler; diğer bölgeleri yalnızca görüntüler.
    */
   regions?: (number | Region)[] | null;
   updatedAt: string;
