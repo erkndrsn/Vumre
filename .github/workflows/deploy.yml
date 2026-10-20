@@ -1,0 +1,68 @@
+name: Deploy (production)
+
+# main'e her push'ta otomatik deploy. Manuel de tetiklenebilir (Actions sekmesi -> Run workflow).
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Aynı anda iki deploy çakışmasın
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, Windows]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Uygulama repoda Vumre/ alt klasöründe. Sabit klasöre (C:\apps\Vumre) /MIR ile
+      # senkronluyoruz ki git'te silinen dosyalar sunucuda kalmasın. Kalıcı veri
+      # (SQLite .db, umreci yüklemeleri, media, .env) hem /XD /XF ile dışlanıyor:
+      # mirror/purge bunlara dokunmaz.
+      - name: Sync -> C:\apps\Vumre
+        shell: powershell
+        run: |
+          $dst = "C:\apps\Vumre"
+          robocopy "$env:GITHUB_WORKSPACE\Vumre" $dst /MIR `
+            /XD node_modules .next .git "$dst\uploads" "$dst\media" "$dst\data" `
+            /XF .env .env.local .env.production *.db *.db-shm *.db-wal
+          $rc = $LASTEXITCODE
+          if ($rc -ge 8) { throw "robocopy hata (kod $rc)" }
+          Write-Host "sync tamam (robocopy kod $rc)"
+          exit 0
+
+      # Çalışan Next process'i .next ve sharp native dosyalarını kilitler (EPERM/EBUSY),
+      # o yüzden build öncesi durduruyoruz. try/finally: build patlasa bile app geri açılır.
+      - name: Install / build / restart
+        shell: powershell
+        working-directory: C:\apps\Vumre
+        run: |
+          # Process PM2'de kayıtlı değilse (ilk kurulum) stop hata verir; ilk seferde yok sayılır.
+          pm2 describe vumre *> $null
+          $registered = ($LASTEXITCODE -eq 0)
+          if ($registered) { pm2 stop ecosystem.config.cjs }
+          $ok = $true
+          try {
+            npm ci
+            if ($LASTEXITCODE -ne 0) { throw "npm ci hata" }
+            # Şema migration'ları (src/migrations). Production'da Payload şemayı kendisi push'lamaz.
+            # DATABASE_URL / PAYLOAD_SECRET C:\apps\Vumre\.env'den okunur.
+            npm run payload -- migrate
+            if ($LASTEXITCODE -ne 0) { throw "migration hata" }
+
+            npm run build
+            if ($LASTEXITCODE -ne 0) { throw "build hata" }
+          } catch {
+            $ok = $false
+            Write-Host "DEPLOY HATASI: $_"
+          } finally {
+            Set-Location C:\apps\Vumre
+            if ($registered) { pm2 restart ecosystem.config.cjs } else { pm2 start ecosystem.config.cjs }
+            pm2 save
+          }
+          if (-not $ok) { exit 1 }
+          Write-Host "deploy tamam"
+          exit 0
