@@ -1,61 +1,182 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { find } from '@/api/collections'
 import { useAuthStore } from '@/stores/auth'
-import type { Pilgrim, Region, User, Where } from '@/types/payload'
+import type { Gender, Pilgrim, Region, User } from '@/types/payload'
 import { GENDER_LABELS } from '@/utils/accommodation'
 import { ageOn } from '@/utils/childPricing'
 
-interface RegionGroup {
+/** Sol listedeki bölge: sayımlar arşivde olmayan umrecilerden. */
+interface RegionEntry {
   key: string
+  id: number | null
   name: string
-  pilgrims: Pilgrim[]
+  total: number
   male: number
   female: number
+  assigned: number
+  own: boolean
 }
 
+const NO_REGION = 'none'
+const ALL = 'all'
+
 const auth = useAuthStore()
+const route = useRoute()
+const router = useRouter()
 const items = ref<Pilgrim[]>([])
 const regions = ref<Region[]>([])
-const regionFilter = ref<number | ''>('')
 const loading = ref(false)
 const error = ref('')
 // Admin her bölgenin yöneticilerini görür: bölge id → yönetici adları.
 const managersByRegion = ref<Record<string, string[]>>({})
 
-// Bölge adına göre sıralı; bölgesi olmayan eski kayıtlar en sonda.
-const groups = computed<RegionGroup[]>(() => {
-  const byRegion = new Map<string, RegionGroup>()
-  for (const p of items.value) {
-    const region = p.region && typeof p.region === 'object' ? p.region : null
-    const key = region ? String(region.id) : 'none'
-    let group = byRegion.get(key)
-    if (!group) {
-      group = { key, name: region?.name ?? 'Bölgesi yok', pilgrims: [], male: 0, female: 0 }
-      byRegion.set(key, group)
-    }
-    group.pilgrims.push(p)
-    group[p.gender]++
+const search = ref('')
+const genderFilter = ref<Gender | ''>('')
+// Bölgeler ekranından "Umrecileri gör" ile gelindiğinde bölge seçili açılır (?region=3).
+const selected = ref<string>(
+  typeof route.query.region === 'string' && route.query.region ? route.query.region : '',
+)
+
+const regionOf = (p: Pilgrim) => (p.region && typeof p.region === 'object' ? p.region : null)
+const roomNumberOf = (p: Pilgrim) =>
+  p.room && typeof p.room === 'object' ? p.room.roomNumber : null
+const isOwn = (id: number | null) => id !== null && auth.managedRegionIds.includes(id)
+
+const entries = computed<RegionEntry[]>(() => {
+  const map = new Map<string, RegionEntry>()
+  // Umrecisi olmayan aktif bölgeler de listede görünür (yeni kayıt için seçilebilsin).
+  for (const r of regions.value) {
+    if (r.active === false) continue
+    map.set(String(r.id), {
+      key: String(r.id),
+      id: r.id,
+      name: r.name,
+      total: 0,
+      male: 0,
+      female: 0,
+      assigned: 0,
+      own: isOwn(r.id),
+    })
   }
-  return [...byRegion.values()].sort((a, b) =>
-    a.key === 'none' ? 1 : b.key === 'none' ? -1 : a.name.localeCompare(b.name, 'tr'),
+  for (const p of items.value) {
+    const region = regionOf(p)
+    const key = region ? String(region.id) : NO_REGION
+    let entry = map.get(key)
+    if (!entry) {
+      entry = {
+        key,
+        id: region?.id ?? null,
+        name: region?.name ?? 'Bölgesi yok',
+        total: 0,
+        male: 0,
+        female: 0,
+        assigned: 0,
+        own: isOwn(region?.id ?? null),
+      }
+      map.set(key, entry)
+    }
+    entry.total++
+    entry[p.gender]++
+    if (p.room) entry.assigned++
+  }
+  // Bölge yöneticisinin kendi bölgeleri üstte; sonra ada göre, bölgesizler en sonda.
+  return [...map.values()].sort(
+    (a, b) =>
+      Number(a.key === NO_REGION) - Number(b.key === NO_REGION) ||
+      Number(b.own) - Number(a.own) ||
+      a.name.localeCompare(b.name, 'tr'),
   )
 })
+
+const allEntry = computed<RegionEntry>(() => ({
+  key: ALL,
+  id: null,
+  name: 'Tüm bölgeler',
+  total: items.value.length,
+  male: items.value.filter((p) => p.gender === 'male').length,
+  female: items.value.filter((p) => p.gender === 'female').length,
+  assigned: items.value.filter((p) => p.room).length,
+  own: false,
+}))
+
+const ownEntries = computed(() => entries.value.filter((e) => e.own))
+
+// Bölge yöneticisinin listesi kendi bölgeleriyle başlar; "Tüm bölgeler" onlardan sonra gelir.
+const navEntries = computed(() =>
+  ownEntries.value.length
+    ? [...ownEntries.value, allEntry.value, ...entries.value.filter((e) => !e.own)]
+    : [allEntry.value, ...entries.value],
+)
+
+// Seçim yoksa bölge yöneticisi listedeki ilk kendi bölgesini görür, admin tüm bölgeleri.
+const current = computed(
+  () =>
+    entries.value.find((e) => e.key === selected.value) ??
+    (selected.value === ALL ? undefined : ownEntries.value[0]) ??
+    allEntry.value,
+)
+const showRegionColumn = computed(() => current.value.key === ALL)
+const canAddHere = computed(
+  () => current.value.id !== null && auth.canEditRegion(current.value.id),
+)
+const readOnly = computed(
+  () => current.value.id !== null && !auth.canEditRegion(current.value.id),
+)
+
+const rows = computed(() => {
+  const term = search.value.trim().toLocaleLowerCase('tr')
+  const key = current.value.key
+  return items.value.filter((p) => {
+    if (key !== ALL && String(regionOf(p)?.id ?? NO_REGION) !== key) return false
+    if (genderFilter.value && p.gender !== genderFilter.value) return false
+    if (!term) return true
+    return [p.fullName, p.phone, roomNumberOf(p)].some((v) =>
+      (v ?? '').toLocaleLowerCase('tr').includes(term),
+    )
+  })
+})
+
+// Kimsenin telefonu girilmemişse sütun yer kaplamasın.
+const showPhoneColumn = computed(() => rows.value.some((p) => p.phone))
+
+const percent = (part: number, whole: number) =>
+  whole ? `${Math.round((part / whole) * 100)}%` : '0%'
+
+function select(key: string) {
+  selected.value = key
+}
+
+// Seçili bölge adreste tutulur; sayfa yenilenince ya da paylaşılınca aynı bölge açılır.
+// Bölge yöneticisinin "Tüm bölgeler" seçimi de yazılır, yoksa yenileyince kendi bölgesine döner.
+watch(selected, (key) => {
+  const query = { ...route.query }
+  if (key && (key !== ALL || ownEntries.value.length)) query.region = key
+  else delete query.region
+  router.replace({ query })
+})
+
+function openPilgrim(p: Pilgrim) {
+  router.push({ name: 'pilgrim-edit', params: { id: p.id } })
+}
 
 async function load() {
   loading.value = true
   error.value = ''
-  const conditions: Where[] = [{ archived: { not_equals: true } }]
-  if (regionFilter.value) conditions.push({ region: { equals: regionFilter.value } })
   try {
-    const res = await find<Pilgrim>('pilgrims', {
-      limit: 0,
-      depth: 1,
-      sort: 'fullName',
-      where: { and: conditions },
-    })
+    // Bölgeler umrecilerle birlikte gelir; yöneticinin açılış bölgesi ikisine de bağlı.
+    const [res, regionRes] = await Promise.all([
+      find<Pilgrim>('pilgrims', {
+        limit: 0,
+        depth: 1,
+        sort: 'fullName',
+        where: { archived: { not_equals: true } },
+      }),
+      find<Region>('regions', { limit: 0, sort: 'name' }),
+    ])
     items.value = res.docs
+    regions.value = regionRes.docs
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Umreciler yüklenemedi.'
   } finally {
@@ -63,12 +184,7 @@ async function load() {
   }
 }
 
-watch(regionFilter, load)
-
 onMounted(async () => {
-  find<Region>('regions', { limit: 0, sort: 'name' })
-    .then((res) => (regions.value = res.docs))
-    .catch(() => undefined)
   if (auth.isAdmin) {
     find<User>('users', { limit: 0, depth: 0, where: { role: { equals: 'regionManager' } } })
       .then((res) => {
@@ -90,130 +206,507 @@ onMounted(async () => {
   <section>
     <div class="page-header">
       <h1>Bölge Listesi</h1>
-      <div class="header-actions">
-        <label class="field">
-          <select v-model="regionFilter" aria-label="Bölgeye göre filtrele">
-            <option value="">Tüm bölgeler</option>
-            <option v-for="r in regions" :key="r.id" :value="r.id">{{ r.name }}</option>
-          </select>
-        </label>
-        <RouterLink
-          :to="{
-            name: 'pilgrim-new',
-            query:
-              regionFilter && auth.canEditRegion(regionFilter)
-                ? { region: String(regionFilter) }
-                : {},
-          }"
-          class="btn btn-primary"
-          >Yeni umreci</RouterLink
-        >
-      </div>
+      <RouterLink
+        :to="{
+          name: 'pilgrim-new',
+          query: canAddHere ? { region: String(current.id) } : {},
+        }"
+        class="btn btn-primary"
+        >Yeni umreci{{ canAddHere ? ` · ${current.name}` : '' }}</RouterLink
+      >
     </div>
 
     <div v-if="error" class="alert alert-error" role="alert">{{ error }}</div>
 
-    <p v-if="loading" class="card empty-state">Yükleniyor…</p>
-    <p v-else-if="!groups.length" class="card empty-state">Kayıtlı umreci bulunamadı.</p>
-    <div v-else class="region-grid">
-      <article v-for="g in groups" :key="g.key" class="card region">
-        <header class="region-header">
-          <h2>
-            {{ g.name }}
-            <span
-              v-if="g.key !== 'none' && !auth.canEditRegion(Number(g.key))"
-              class="badge"
-              title="Sorumlu olduğunuz bölgelerden biri değil; kayıtlar yalnızca görüntülenebilir."
+    <p v-if="loading && !items.length" class="card empty-state">Yükleniyor…</p>
+    <div v-else class="layout">
+      <!-- Bölge seçimi: geniş ekranda dikey liste, dar ekranda açılır liste -->
+      <nav class="card region-nav" aria-label="Bölgeler">
+        <button
+          v-for="e in navEntries"
+          :key="e.key"
+          type="button"
+          class="region-item"
+          :class="{ on: current.key === e.key, empty: !e.total, all: e.key === ALL }"
+          :aria-current="current.key === e.key ? 'true' : undefined"
+          @click="select(e.key)"
+        >
+          <span class="region-name">
+            {{ e.name }}
+            <i v-if="e.own" class="own-dot" title="Sorumlu olduğunuz bölge" />
+          </span>
+          <span class="region-count">{{ e.total }}</span>
+        </button>
+      </nav>
+      <label class="region-select">
+        <span class="sr-only">Bölge</span>
+        <select :value="current.key" @change="select(($event.target as HTMLSelectElement).value)">
+          <option v-for="e in navEntries" :key="e.key" :value="e.key">
+            {{ e.name }} ({{ e.total }}){{ e.own ? ' ★' : '' }}
+          </option>
+        </select>
+      </label>
+
+      <div class="card panel">
+        <header class="panel-head">
+          <div class="title">
+            <h2>{{ current.name }}</h2>
+            <span v-if="readOnly" class="badge" title="Sorumlu olduğunuz bölgelerden biri değil"
               >Yalnızca görüntüleme</span
             >
-          </h2>
-          <span class="muted">
-            {{ g.pilgrims.length }} kişi · {{ g.male }} E · {{ g.female }} K
-          </span>
+            <span v-else-if="current.own" class="badge badge-success">Sorumlu olduğunuz bölge</span>
+          </div>
+          <dl class="stats">
+            <div>
+              <dt>Kişi</dt>
+              <dd>{{ current.total }}</dd>
+            </div>
+            <div>
+              <dt>Erkek / Kadın</dt>
+              <dd>{{ current.male }} / {{ current.female }}</dd>
+            </div>
+            <div class="placement">
+              <dt>Odaya yerleşen</dt>
+              <dd>
+                {{ current.assigned }}
+                <span class="muted">/ {{ current.total }}</span>
+                <span class="track" aria-hidden="true">
+                  <span class="fill" :style="{ width: percent(current.assigned, current.total) }" />
+                </span>
+              </dd>
+            </div>
+            <div v-if="current.id !== null && managersByRegion[current.key]">
+              <dt>Yönetici</dt>
+              <dd class="managers">{{ managersByRegion[current.key]?.join(', ') }}</dd>
+            </div>
+          </dl>
         </header>
-        <p v-if="managersByRegion[g.key]" class="muted managers">
-          Yönetici: {{ managersByRegion[g.key]?.join(', ') }}
+
+        <div class="filters">
+          <input
+            v-model="search"
+            type="search"
+            placeholder="İsim, telefon veya oda no ara…"
+            aria-label="Umreci ara"
+          />
+          <div class="segmented" role="group" aria-label="Cinsiyet">
+            <button
+              v-for="opt in [
+                { key: '', label: 'Tümü' },
+                { key: 'male', label: 'Erkek' },
+                { key: 'female', label: 'Kadın' },
+              ] as const"
+              :key="opt.key"
+              type="button"
+              :class="{ on: genderFilter === opt.key }"
+              :aria-pressed="genderFilter === opt.key"
+              @click="genderFilter = opt.key"
+            >
+              {{ opt.label }}
+            </button>
+          </div>
+        </div>
+
+        <p v-if="!rows.length" class="empty-state">
+          {{ current.total ? 'Aramaya uyan kişi yok.' : 'Bu bölgede henüz umreci yok.' }}
         </p>
-        <div class="table-wrap">
-          <table class="table compact">
+        <div v-else class="table-wrap">
+          <table class="table pilgrims">
             <thead>
               <tr>
                 <th>Ad Soyad</th>
-                <th>Telefon</th>
-                <th>Cinsiyet</th>
+                <th v-if="showRegionColumn">Bölge</th>
                 <th class="num">Yaş</th>
+                <th v-if="showPhoneColumn">Telefon</th>
+                <th>Oda</th>
               </tr>
             </thead>
             <tbody>
-              <tr v-for="p in g.pilgrims" :key="p.id">
+              <tr v-for="p in rows" :key="p.id" class="row-link" @click="openPilgrim(p)">
                 <td>
-                  <RouterLink :to="{ name: 'pilgrim-edit', params: { id: p.id } }">
-                    {{ p.firstName }} {{ p.lastName }}
-                  </RouterLink>
+                  <span class="person">
+                    <span class="gender" :class="p.gender" :title="GENDER_LABELS[p.gender]">{{
+                      p.gender === 'male' ? 'E' : 'K'
+                    }}</span>
+                    <RouterLink
+                      :to="{ name: 'pilgrim-edit', params: { id: p.id } }"
+                      class="name"
+                      @click.stop
+                      >{{ p.fullName }}</RouterLink
+                    >
+                  </span>
                 </td>
-                <td>{{ p.phone || '—' }}</td>
-                <td>{{ GENDER_LABELS[p.gender] }}</td>
-                <td class="num">{{ ageOn(p.birthDate) ?? '—' }}</td>
+                <td v-if="showRegionColumn" class="muted">{{ regionOf(p)?.name ?? '—' }}</td>
+                <td class="num">{{ ageOn(p.birthDate) ?? '–' }}</td>
+                <td v-if="showPhoneColumn">
+                  <a v-if="p.phone" :href="`tel:${p.phone}`" class="phone" @click.stop>{{
+                    p.phone
+                  }}</a>
+                  <span v-else class="muted">–</span>
+                </td>
+                <td>
+                  <span v-if="roomNumberOf(p)" class="room-chip">{{ roomNumberOf(p) }}</span>
+                  <span v-else class="room-chip none">Odasız</span>
+                </td>
               </tr>
             </tbody>
           </table>
         </div>
-      </article>
+        <p v-if="rows.length && rows.length !== current.total" class="muted result-count">
+          {{ rows.length }} / {{ current.total }} kişi gösteriliyor
+        </p>
+      </div>
     </div>
   </section>
 </template>
 
 <style scoped>
-.header-actions {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  flex-wrap: wrap;
-}
-
 .alert {
   margin-bottom: 1rem;
 }
 
-.region-grid {
+.layout {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
+  grid-template-columns: 240px minmax(0, 1fr);
   gap: 1rem;
   align-items: start;
 }
 
-.region {
-  padding: 1rem;
+/* Bölge listesi */
+.region-nav {
+  position: sticky;
+  top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0.5rem;
+  max-height: calc(100vh - 2rem);
+  max-height: calc(100dvh - 2rem);
+  overflow-y: auto;
 }
 
-.region-header {
+.region-item {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
-  margin-bottom: 0.5rem;
+  width: 100%;
+  padding: 0.5rem 0.625rem;
+  border: 0;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  font-size: 0.9375rem;
+  text-align: left;
+  cursor: pointer;
 }
 
-.region-header h2 {
-  font-size: 1rem;
+.region-item:hover {
+  background: var(--color-hover);
 }
 
-.region-header .muted {
+.region-item.on {
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+/* "Tüm bölgeler" kendi bölgelerini diğerlerinden ayırır (yöneticide listenin ortasında). */
+.region-item.all {
+  margin-block: 0.25rem;
+  border-block: 1px solid var(--color-border);
+  border-radius: 0;
+}
+
+.region-item.all:first-child {
+  margin-top: 0;
+  border-top: 0;
+}
+
+.region-item.empty .region-count {
+  opacity: 0.5;
+}
+
+.region-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  min-width: 0;
+}
+
+.own-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--color-success);
+  flex: none;
+}
+
+.region-count {
+  min-width: 1.75rem;
+  padding: 0.0625rem 0.4rem;
+  border-radius: 999px;
+  background: var(--color-hover);
+  color: var(--color-muted);
   font-size: 0.8125rem;
+  font-weight: 500;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.region-item.on .region-count {
+  background: var(--color-surface);
+  color: var(--color-primary);
+}
+
+.region-select {
+  display: none;
+}
+
+.region-select select {
+  width: 100%;
+  padding: 0.625rem 0.75rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  font: inherit;
+  color: var(--color-text);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
   white-space: nowrap;
 }
 
-.managers {
+/* Seçili bölge paneli */
+.panel {
+  padding: 1.25rem;
+}
+
+.panel-head {
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.title {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  flex-wrap: wrap;
+}
+
+.title h2 {
+  font-size: 1.25rem;
+}
+
+.stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 2rem;
+  margin: 0;
+}
+
+.stats dt {
+  color: var(--color-muted);
   font-size: 0.8125rem;
-  margin: 0 0 0.5rem;
 }
 
-.table.compact {
+.stats dd {
+  margin: 0.125rem 0 0;
+  color: var(--color-heading);
+  font-size: 1.125rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.stats dd .muted {
+  font-weight: 400;
+  font-size: 0.9375rem;
+}
+
+.stats .managers {
+  font-size: 0.9375rem;
+  font-weight: 500;
+}
+
+.placement dd {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.track {
+  display: inline-block;
+  width: 5rem;
+  height: 0.375rem;
+  margin-left: 0.375rem;
+  border-radius: 999px;
+  background: var(--color-hover);
+  overflow: hidden;
+}
+
+.fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--color-primary);
+}
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.75rem;
+  align-items: center;
+  padding: 1rem 0 0.75rem;
+}
+
+.filters input[type='search'] {
+  flex: 1 1 220px;
+  min-width: 0;
+  padding: 0.45rem 0.75rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  font: inherit;
   font-size: 0.875rem;
+  color: var(--color-text);
 }
 
-.table.compact th,
-.table.compact td {
-  padding: 0.3rem 0.5rem;
+.segmented {
+  display: inline-flex;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--color-surface);
+}
+
+.segmented button {
+  border: 0;
+  background: transparent;
+  color: var(--color-text);
+  padding: 0.4rem 0.75rem;
+  font: inherit;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.segmented button + button {
+  border-left: 1px solid var(--color-border);
+}
+
+.segmented button.on {
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+/* Umreci tablosu */
+.pilgrims td {
+  padding-block: 0.5rem;
+}
+
+.row-link {
+  cursor: pointer;
+}
+
+.row-link:hover td {
+  background: var(--color-hover);
+}
+
+.person {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.name {
+  color: var(--color-heading);
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.row-link:hover .name {
+  color: var(--color-primary);
+}
+
+.gender {
+  display: inline-grid;
+  place-items: center;
+  width: 1.375rem;
+  height: 1.375rem;
+  border-radius: 50%;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  flex: none;
+}
+
+.gender.male {
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+}
+
+/* Oda Yerleşimi ile aynı renkler */
+.gender.female {
+  background: var(--color-warning-soft);
+  color: var(--color-warning);
+}
+
+.phone {
+  color: inherit;
+  text-decoration: none;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.phone:hover {
+  color: var(--color-primary);
+}
+
+.room-chip {
+  display: inline-block;
+  padding: 0.0625rem 0.5rem;
+  border-radius: 999px;
+  background: var(--color-success-soft);
+  color: var(--color-success);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.room-chip.none {
+  background: var(--color-hover);
+  color: var(--color-muted);
+  font-weight: 500;
+}
+
+.result-count {
+  margin: 0.75rem 0 0;
+  font-size: 0.8125rem;
+}
+
+@media (max-width: 800px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .region-nav {
+    display: none;
+  }
+
+  .region-select {
+    display: block;
+  }
+
+  .panel {
+    padding: 1rem;
+  }
 }
 </style>

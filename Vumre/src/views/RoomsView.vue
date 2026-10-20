@@ -244,6 +244,8 @@ onMounted(async () => {
 }
 
 .modal {
+  /* Genel `margin: 0` sıfırlaması dialog'un ortalanmasını bozar. */
+  margin: auto;
   width: min(640px, calc(100vw - 2rem));
   max-height: calc(100vh - 2rem);
   max-height: calc(100dvh - 2rem);
