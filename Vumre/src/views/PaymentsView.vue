@@ -160,8 +160,16 @@ function remainingIn(currency: string) {
 
 const formRemaining = computed(() => remainingIn(form.currency))
 
-/** Formdaki para birimindeki aktif kasalar. */
-const formCashboxes = computed(() => cashboxesIn(form.currency || selected.value?.currency))
+/**
+ * Formda seçilebilecek aktif kasalar: tahsilat alınabilecek tüm para birimlerindeki kasalar.
+ * Kasa seçilince formun para birimi kasanınkine geçer.
+ */
+const formCashboxes = computed(() => {
+  const currencies = currencyOptions.value.length
+    ? currencyOptions.value
+    : [form.currency || selected.value?.currency]
+  return currencies.flatMap((c) => cashboxesIn(c))
+})
 
 /** Kalan borcun diğer para birimlerindeki karşılıkları ("460 EUR · 17.500 TRY"). */
 const remainingOthers = computed(() =>
@@ -321,12 +329,26 @@ async function destroy(payment: Payment) {
   }
 }
 
-// Para birimi değişince önerilen tutar o para birimindeki kalan borç, kasa da o dövizin kasası olur.
+// Para birimi değişince önerilen tutar o para birimindeki kalan borç olur; seçili kasa o dövizde
+// değilse kasa da o dövizin kasası olur.
 watch(
   () => form.currency,
   () => {
     form.amount = formRemaining.value
-    form.cashbox = pickCashbox(form.currency || selected.value?.currency)
+    const currency = form.currency || selected.value?.currency
+    const box = cashboxes.value.find((c) => c.id === form.cashbox)
+    if (box?.currency !== currency) form.cashbox = pickCashbox(currency)
+  },
+)
+
+// Başka dövizdeki kasa seçilince tahsilatın para birimi kasanınkine geçer.
+watch(
+  () => form.cashbox,
+  (id) => {
+    const box = cashboxes.value.find((c) => c.id === id)
+    if (box && box.currency !== (form.currency || selected.value?.currency)) {
+      form.currency = box.currency
+    }
   },
 )
 
@@ -526,7 +548,7 @@ onMounted(async () => {
             <span>Kasa</span>
             <select v-model.number="form.cashbox" required :disabled="!formCashboxes.length">
               <option v-for="c in formCashboxes" :key="c.id" :value="c.id">
-                {{ c.name }} · {{ CASHBOX_KIND_LABELS[c.kind] }}
+                {{ c.name }} · {{ c.currency }} · {{ CASHBOX_KIND_LABELS[c.kind] }}
               </option>
             </select>
           </label>
@@ -557,7 +579,8 @@ onMounted(async () => {
           Ödeme grubun toplam borcundan düşer; kişilere ayrıca dağıtılmaz.
         </p>
         <p v-if="!formCashboxes.length" class="small warn">
-          {{ form.currency || selected.currency }} cinsinden aktif kasa yok; tahsilat için önce
+          {{ (currencyOptions.length ? currencyOptions : [form.currency || selected.currency]).join(', ') }}
+          cinsinden aktif kasa yok; tahsilat için önce
           <RouterLink to="/kasa">Kasa</RouterLink> sayfasından kasa açın.
         </p>
         <div class="form-actions">
