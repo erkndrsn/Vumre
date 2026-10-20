@@ -5,9 +5,12 @@ import { find } from '@/api/collections'
 import { useAuthStore } from '@/stores/auth'
 import type { Gender, Pilgrim, Region, User } from '@/types/payload'
 import { GENDER_LABELS } from '@/utils/accommodation'
-import { ageOn } from '@/utils/childPricing'
+import { ageOn, isInfant } from '@/utils/childPricing'
 
-/** Sol listedeki bölge: sayımlar arşivde olmayan umrecilerden. */
+/**
+ * Sol listedeki bölge: sayımlar arşivde olmayan umrecilerden. Bebekler (0-1 yaş) kontenjan
+ * tutmadığı için kişi, cinsiyet ve yerleşim sayılarına girmez; `infants` içinde ayrıca sayılır.
+ */
 interface RegionEntry {
   key: string
   id: number | null
@@ -16,6 +19,7 @@ interface RegionEntry {
   male: number
   female: number
   assigned: number
+  infants: number
   own: boolean
 }
 
@@ -44,6 +48,16 @@ const roomNumberOf = (p: Pilgrim) =>
   p.room && typeof p.room === 'object' ? p.room.roomNumber : null
 const isOwn = (id: number | null) => id !== null && auth.managedRegionIds.includes(id)
 
+function tally(entry: RegionEntry, p: Pilgrim) {
+  if (isInfant(p.birthDate)) {
+    entry.infants++
+    return
+  }
+  entry.total++
+  entry[p.gender]++
+  if (p.room) entry.assigned++
+}
+
 const entries = computed<RegionEntry[]>(() => {
   const map = new Map<string, RegionEntry>()
   // Umrecisi olmayan aktif bölgeler de listede görünür (yeni kayıt için seçilebilsin).
@@ -57,6 +71,7 @@ const entries = computed<RegionEntry[]>(() => {
       male: 0,
       female: 0,
       assigned: 0,
+      infants: 0,
       own: isOwn(r.id),
     })
   }
@@ -73,13 +88,12 @@ const entries = computed<RegionEntry[]>(() => {
         male: 0,
         female: 0,
         assigned: 0,
+        infants: 0,
         own: isOwn(region?.id ?? null),
       }
       map.set(key, entry)
     }
-    entry.total++
-    entry[p.gender]++
-    if (p.room) entry.assigned++
+    tally(entry, p)
   }
   // Bölge yöneticisinin kendi bölgeleri üstte; sonra ada göre, bölgesizler en sonda.
   return [...map.values()].sort(
@@ -90,16 +104,21 @@ const entries = computed<RegionEntry[]>(() => {
   )
 })
 
-const allEntry = computed<RegionEntry>(() => ({
-  key: ALL,
-  id: null,
-  name: 'Tüm bölgeler',
-  total: items.value.length,
-  male: items.value.filter((p) => p.gender === 'male').length,
-  female: items.value.filter((p) => p.gender === 'female').length,
-  assigned: items.value.filter((p) => p.room).length,
-  own: false,
-}))
+const allEntry = computed<RegionEntry>(() => {
+  const entry: RegionEntry = {
+    key: ALL,
+    id: null,
+    name: 'Tüm bölgeler',
+    total: 0,
+    male: 0,
+    female: 0,
+    assigned: 0,
+    infants: 0,
+    own: false,
+  }
+  for (const p of items.value) tally(entry, p)
+  return entry
+})
 
 const ownEntries = computed(() => entries.value.filter((e) => e.own))
 
@@ -118,12 +137,8 @@ const current = computed(
     allEntry.value,
 )
 const showRegionColumn = computed(() => current.value.key === ALL)
-const canAddHere = computed(
-  () => current.value.id !== null && auth.canEditRegion(current.value.id),
-)
-const readOnly = computed(
-  () => current.value.id !== null && !auth.canEditRegion(current.value.id),
-)
+const canAddHere = computed(() => current.value.id !== null && auth.canEditRegion(current.value.id))
+const readOnly = computed(() => current.value.id !== null && !auth.canEditRegion(current.value.id))
 
 const rows = computed(() => {
   const term = search.value.trim().toLocaleLowerCase('tr')
@@ -227,7 +242,7 @@ onMounted(async () => {
           :key="e.key"
           type="button"
           class="region-item"
-          :class="{ on: current.key === e.key, empty: !e.total, all: e.key === ALL }"
+          :class="{ on: current.key === e.key, empty: !e.total && !e.infants, all: e.key === ALL }"
           :aria-current="current.key === e.key ? 'true' : undefined"
           @click="select(e.key)"
         >
@@ -235,14 +250,20 @@ onMounted(async () => {
             {{ e.name }}
             <i v-if="e.own" class="own-dot" title="Sorumlu olduğunuz bölge" />
           </span>
-          <span class="region-count">{{ e.total }}</span>
+          <span
+            class="region-count"
+            :title="e.infants ? `${e.total} kişi + ${e.infants} bebek` : undefined"
+            >{{ e.total }}<template v-if="e.infants"> + {{ e.infants }}</template></span
+          >
         </button>
       </nav>
       <label class="region-select">
         <span class="sr-only">Bölge</span>
         <select :value="current.key" @change="select(($event.target as HTMLSelectElement).value)">
           <option v-for="e in navEntries" :key="e.key" :value="e.key">
-            {{ e.name }} ({{ e.total }}){{ e.own ? ' ★' : '' }}
+            {{ e.name }} ({{ e.total }}{{ e.infants ? ` + ${e.infants} bebek` : '' }}){{
+              e.own ? ' ★' : ''
+            }}
           </option>
         </select>
       </label>
@@ -259,7 +280,12 @@ onMounted(async () => {
           <dl class="stats">
             <div>
               <dt>Kişi</dt>
-              <dd>{{ current.total }}</dd>
+              <dd>
+                {{ current.total }}
+                <span v-if="current.infants" class="muted infants"
+                  >+ {{ current.infants }} bebek</span
+                >
+              </dd>
             </div>
             <div>
               <dt>Erkek / Kadın</dt>
@@ -308,7 +334,11 @@ onMounted(async () => {
         </div>
 
         <p v-if="!rows.length" class="empty-state">
-          {{ current.total ? 'Aramaya uyan kişi yok.' : 'Bu bölgede henüz umreci yok.' }}
+          {{
+            current.total || current.infants
+              ? 'Aramaya uyan kişi yok.'
+              : 'Bu bölgede henüz umreci yok.'
+          }}
         </p>
         <div v-else class="table-wrap">
           <table class="table pilgrims">
@@ -322,7 +352,13 @@ onMounted(async () => {
               </tr>
             </thead>
             <tbody>
-              <tr v-for="p in rows" :key="p.id" class="row-link" @click="openPilgrim(p)">
+              <tr
+                v-for="p in rows"
+                :key="p.id"
+                class="row-link"
+                :class="{ infant: isInfant(p.birthDate) }"
+                @click="openPilgrim(p)"
+              >
                 <td>
                   <span class="person">
                     <span class="gender" :class="p.gender" :title="GENDER_LABELS[p.gender]">{{
@@ -337,7 +373,10 @@ onMounted(async () => {
                   </span>
                 </td>
                 <td v-if="showRegionColumn" class="muted">{{ regionOf(p)?.name ?? '—' }}</td>
-                <td class="num">{{ ageOn(p.birthDate) ?? '–' }}</td>
+                <td class="num">
+                  <span v-if="isInfant(p.birthDate)" class="badge badge-infant">Bebek</span>
+                  {{ ageOn(p.birthDate) ?? '–' }}
+                </td>
                 <td v-if="showPhoneColumn">
                   <a v-if="p.phone" :href="`tel:${p.phone}`" class="phone" @click.stop>{{
                     p.phone
@@ -352,8 +391,11 @@ onMounted(async () => {
             </tbody>
           </table>
         </div>
-        <p v-if="rows.length && rows.length !== current.total" class="muted result-count">
-          {{ rows.length }} / {{ current.total }} kişi gösteriliyor
+        <p
+          v-if="rows.length && rows.length !== current.total + current.infants"
+          class="muted result-count"
+        >
+          {{ rows.length }} / {{ current.total + current.infants }} kişi gösteriliyor
         </p>
       </div>
     </div>
@@ -452,6 +494,7 @@ onMounted(async () => {
   font-size: 0.8125rem;
   font-weight: 500;
   text-align: center;
+  white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
 
@@ -690,6 +733,22 @@ onMounted(async () => {
 .result-count {
   margin: 0.75rem 0 0;
   font-size: 0.8125rem;
+}
+
+.infants {
+  font-size: 0.8125rem;
+  font-weight: 400;
+}
+
+/* Bebekler (0-1 yaş) yatak tutmaz; Umreciler listesindeki gibi ayırt edilsin. */
+tr.infant td {
+  background: var(--color-primary-soft);
+}
+
+.badge-infant {
+  margin-right: 0.375rem;
+  background: var(--color-primary);
+  color: var(--color-on-primary);
 }
 
 @media (max-width: 800px) {

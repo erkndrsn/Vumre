@@ -13,11 +13,13 @@ interface FormState {
   active: boolean
 }
 
+/** Bebekler (0-1 yaş) kontenjan tutmadığı için diğer sayımlara girmez, `infants` içinde sayılır. */
 interface RegionStats {
   total: number
   male: number
   female: number
   assigned: number
+  infants: number
 }
 
 type StatusFilter = 'all' | 'active' | 'inactive'
@@ -60,7 +62,7 @@ const flightPointOf = (item: Region) =>
     ? item.defaultFlightPoint
     : null
 
-const emptyStats = (): RegionStats => ({ total: 0, male: 0, female: 0, assigned: 0 })
+const emptyStats = (): RegionStats => ({ total: 0, male: 0, female: 0, assigned: 0, infants: 0 })
 
 /** Arşivde olmayan umrecilerin bölge bazında sayımı (yerleşim panosu verisinden). */
 const statsByRegion = computed(() => {
@@ -68,11 +70,15 @@ const statsByRegion = computed(() => {
   for (const p of pilgrims.value) {
     if (!p.region) continue
     const s = map.get(p.region.id) ?? emptyStats()
+    map.set(p.region.id, s)
+    if (p.infant) {
+      s.infants++
+      continue
+    }
     s.total++
     if (p.gender === 'male') s.male++
     else s.female++
     if (p.room !== null) s.assigned++
-    map.set(p.region.id, s)
   }
   return map
 })
@@ -106,13 +112,15 @@ const percent = (part: number, whole: number) =>
 
 const summary = computed(() => {
   const active = items.value.filter(isActive)
-  const inRegion = pilgrims.value.filter((p) => p.region)
+  const counted = pilgrims.value.filter((p) => !p.infant)
+  const inRegion = counted.filter((p) => p.region)
   return {
     regions: items.value.length,
     active: active.length,
     inactive: items.value.length - active.length,
     pilgrims: inRegion.length,
-    noRegion: pilgrims.value.length - inRegion.length,
+    noRegion: counted.length - inRegion.length,
+    infants: pilgrims.value.filter((p) => p.infant && p.region).length,
     assigned: inRegion.filter((p) => p.room !== null).length,
     missing: active.filter(hasMissing).length,
     noFlightPoint: active.filter((r) => missingOf(r).flightPoint).length,
@@ -262,15 +270,19 @@ onMounted(load)
       <div class="card tile">
         <span class="muted">Aktif bölge</span>
         <strong class="value"
-          >{{ num.format(summary.active) }}<small class="muted">
-            / {{ num.format(summary.regions) }}</small
-          ></strong
+          >{{ num.format(summary.active)
+          }}<small class="muted"> / {{ num.format(summary.regions) }}</small></strong
         >
         <span class="muted small">{{ num.format(summary.inactive) }} pasif</span>
       </div>
       <div class="card tile">
         <span class="muted">Bölgelerdeki umreci</span>
-        <strong class="value">{{ num.format(summary.pilgrims) }}</strong>
+        <strong class="value"
+          >{{ num.format(summary.pilgrims)
+          }}<small v-if="summary.infants" class="muted">
+            + {{ num.format(summary.infants) }} bebek</small
+          ></strong
+        >
         <span class="small" :class="summary.noRegion ? 'warn-text' : 'muted'">
           {{
             summary.noRegion
@@ -377,6 +389,9 @@ onMounted(load)
           <span v-if="statsOf(item).total" class="muted gender-split">
             {{ num.format(statsOf(item).male) }} E · {{ num.format(statsOf(item).female) }} K
           </span>
+          <span v-if="statsOf(item).infants" class="muted gender-split">
+            + {{ num.format(statsOf(item).infants) }} bebek
+          </span>
         </div>
 
         <div v-if="statsOf(item).total" class="placement">
@@ -434,7 +449,7 @@ onMounted(load)
 
         <footer class="region-actions">
           <RouterLink
-            v-if="statsOf(item).total"
+            v-if="statsOf(item).total || statsOf(item).infants"
             :to="{ name: 'pilgrims-by-region', query: { region: String(item.id) } }"
             class="btn btn-secondary btn-sm"
             >Umrecileri gör</RouterLink
@@ -444,7 +459,7 @@ onMounted(load)
             {{ isActive(item) ? 'Pasife al' : 'Aktif et' }}
           </button>
           <button
-            v-if="!statsOf(item).total"
+            v-if="!statsOf(item).total && !statsOf(item).infants"
             type="button"
             class="btn btn-danger btn-sm"
             @click="destroy(item)"
@@ -480,8 +495,8 @@ onMounted(load)
             </select>
           </label>
           <p class="muted hint span-all">
-            Uçuş noktası yeni umrecilere varsayılan olarak atanır. Bölgede havalimanı yoksa en
-            yakın nokta seçilir (ör. Aydın → İzmir).
+            Uçuş noktası yeni umrecilere varsayılan olarak atanır. Bölgede havalimanı yoksa en yakın
+            nokta seçilir (ör. Aydın → İzmir).
             <RouterLink v-if="!flightPoints.length" :to="{ name: 'flight-points' }"
               >Uçuş noktası ekle</RouterLink
             >
