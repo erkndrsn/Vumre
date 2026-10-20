@@ -96,6 +96,21 @@ onMounted(load)
     <div v-if="error" class="alert alert-error" role="alert">{{ error }}</div>
 
     <div class="tiles">
+      <!-- Bölge yöneticisi tüm bölgelerin toplamını da, kendi bölgelerininkini de görür. -->
+      <RouterLink
+        v-if="!isAdmin"
+        :to="{ name: 'pilgrims-by-region', query: { region: 'all' } }"
+        class="card tile tile-link"
+      >
+        <span class="muted">Toplam umreci</span>
+        <strong class="value">{{ num.format(stay.pilgrims) }}</strong>
+        <span class="muted small">
+          {{ num.format(stay.male) }} erkek · {{ num.format(stay.female) }} kadın
+          <template v-if="stay.children"> · {{ num.format(stay.children) }} çocuk</template>
+          <template v-if="stay.infants"> (+ {{ num.format(stay.infants) }} bebek)</template>
+        </span>
+      </RouterLink>
+
       <RouterLink
         :to="{ name: isAdmin ? 'pilgrims' : 'pilgrims-by-region' }"
         class="card tile tile-link"
