@@ -3,8 +3,15 @@ import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { assignPilgrims, bulkCreateRooms, getRoomBoard } from '@/api/accommodation'
 import { find } from '@/api/collections'
 import { createGroup } from '@/api/paymentGroups'
+import { useAuthStore } from '@/stores/auth'
 import type { BoardPilgrim, BoardRoom, Gender, RoomType } from '@/types/payload'
 import { GENDER_LABELS, expandRoomRange } from '@/utils/accommodation'
+
+// Panoyu tüm bölge yöneticileri görür; kişi taşıma yetki verilene, oda ekleme ve ödeme grubu
+// oluşturma admine açıktır.
+const auth = useAuthStore()
+const isAdmin = computed(() => auth.isAdmin)
+const canEdit = computed(() => auth.canManageRooms)
 
 type Density = 'compact' | 'comfortable'
 type PoolMode = 'all' | 'unassigned'
@@ -55,6 +62,16 @@ const hoverRoom = ref<number | null>(null)
 const locatedRoom = ref<number | null>(null)
 
 const activeRoomTypes = computed(() => roomTypes.value.filter((t) => t.active !== false))
+
+// Oda tipi koleksiyonu bölge yöneticisine kapalı; filtre seçenekleri panodaki odalardan çıkarılır.
+const filterRoomTypes = computed(() => {
+  if (isAdmin.value) return roomTypes.value.map((t) => ({ id: t.id, name: t.name }))
+  const map = new Map<number, string>()
+  for (const r of rooms.value) if (r.roomType) map.set(r.roomType.id, r.roomType.name)
+  return [...map]
+    .map(([id, name]) => ({ id, name }))
+    .sort((a, b) => a.name.localeCompare(b.name, 'tr'))
+})
 
 const roomById = computed(() => new Map(rooms.value.map((r) => [r.id, r])))
 const pilgrimById = computed(() => new Map(pilgrims.value.map((p) => [p.id, p])))
@@ -219,7 +236,7 @@ async function createGroupFromSelection() {
 
 /** Odaya atar; `room` null ise odadan çıkarır. Kapasite ve cinsiyet karışımı önce burada sorulur. */
 async function move(room: BoardRoom | null, ids: number[]) {
-  if (busy.value) return
+  if (busy.value || !canEdit.value) return
   const movers = ids
     .map((id) => pilgrimById.value.get(id))
     .filter((p): p is BoardPilgrim => !!p)
@@ -293,6 +310,7 @@ async function locateRoom(roomId: number) {
 const drag = reactive<{ ids: number[]; over: number | 'pool' | null }>({ ids: [], over: null })
 
 function onDragStart(event: DragEvent, p: BoardPilgrim) {
+  if (!canEdit.value) return
   // Seçili birini sürüklemek tüm seçimi taşır.
   drag.ids = selected.value.has(p.id) ? [...selected.value] : [p.id]
   event.dataTransfer?.setData('text/plain', drag.ids.join(','))
@@ -400,6 +418,7 @@ function shortName(fullName: string) {
 }
 
 onMounted(async () => {
+  if (!isAdmin.value) return load()
   find<RoomType>('room-types', { limit: 0, sort: 'capacity' })
     .then((res) => {
       roomTypes.value = res.docs
@@ -447,6 +466,7 @@ onMounted(async () => {
           </button>
         </div>
         <button
+          v-if="isAdmin"
           class="btn btn-primary"
           :disabled="!activeRoomTypes.length"
           @click="showBulk = !showBulk"
@@ -456,11 +476,15 @@ onMounted(async () => {
       </div>
     </div>
 
+    <p v-if="!canEdit" class="alert alert-info" role="note">
+      Oda yerleşimini görüntülüyorsunuz. Kişileri odalara yerleştirmek ve taşımak için yetki
+      gerekir.
+    </p>
     <div v-if="error" class="alert alert-error" role="alert">
       {{ error }}
       <button type="button" class="alert-close" aria-label="Kapat" @click="error = ''">×</button>
     </div>
-    <p v-if="!roomTypes.length && !loading" class="alert alert-error">
+    <p v-if="isAdmin && !roomTypes.length && !loading" class="alert alert-error">
       Oda eklemek için önce bir oda tipi tanımlayın.
     </p>
 
@@ -554,7 +578,7 @@ onMounted(async () => {
               <option value="female">Kadın</option>
             </select>
           </div>
-          <label v-if="filteredPilgrims.length" class="check-row select-all">
+          <label v-if="canEdit && filteredPilgrims.length" class="check-row select-all">
             <input type="checkbox" :checked="allFilteredSelected" @change="toggleAll" />
             <span>Listedekilerin tümünü seç</span>
           </label>
@@ -570,13 +594,14 @@ onMounted(async () => {
             :key="p.id"
             class="pool-item"
             :class="{ selected: selected.has(p.id), dragging: drag.ids.includes(p.id) }"
-            draggable="true"
+            :draggable="canEdit"
             @dragstart="onDragStart($event, p)"
             @dragend="onDragEnd"
             @mouseenter="hoverRoom = p.room"
             @mouseleave="hoverRoom = null"
           >
             <input
+              v-if="canEdit"
               type="checkbox"
               :checked="selected.has(p.id)"
               :aria-label="`${p.fullName} seç`"
@@ -634,6 +659,7 @@ onMounted(async () => {
             Odadan çıkar
           </button>
           <button
+            v-if="isAdmin"
             type="button"
             class="btn btn-secondary btn-sm"
             :disabled="busy"
@@ -646,7 +672,7 @@ onMounted(async () => {
           </button>
         </div>
         <form
-          v-if="selected.size && groupFormOpen"
+          v-if="isAdmin && selected.size && groupFormOpen"
           class="group-form"
           @submit.prevent="createGroupFromSelection"
         >
@@ -681,7 +707,7 @@ onMounted(async () => {
           />
           <select v-model="roomTypeFilter" aria-label="Oda tipine göre filtrele">
             <option value="">Tüm oda tipleri</option>
-            <option v-for="t in roomTypes" :key="t.id" :value="t.id">{{ t.name }}</option>
+            <option v-for="t in filterRoomTypes" :key="t.id" :value="t.id">{{ t.name }}</option>
           </select>
           <label class="check-row">
             <input v-model="onlyFree" type="checkbox" />
@@ -750,7 +776,7 @@ onMounted(async () => {
                     dragging: drag.ids.includes(p.id),
                     infant: p.infant,
                   }"
-                  draggable="true"
+                  :draggable="canEdit"
                   :title="`${p.fullName}${p.age !== null ? ` · ${p.age} yaş` : ''} · ${p.region?.name ?? 'bölge yok'}${p.infant ? ' · bebek, yatak tutmaz' : ''}${p.paymentGroup ? ` · ödeme grubu: ${p.paymentGroup.name}` : ''}`"
                   @dragstart="onDragStart($event, p)"
                   @dragend="onDragEnd"
@@ -764,6 +790,7 @@ onMounted(async () => {
                     p.paymentGroup.name
                   }}</span>
                   <button
+                    v-if="canEdit"
                     type="button"
                     class="remove"
                     :disabled="busy"
@@ -780,7 +807,7 @@ onMounted(async () => {
             </article>
 
             <form
-              v-if="activeRoomTypes.length"
+              v-if="isAdmin && activeRoomTypes.length"
               class="room quick-add"
               @submit.prevent="submitQuick"
             >

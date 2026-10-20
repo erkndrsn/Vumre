@@ -13,6 +13,7 @@ interface RoleUser {
   id: number | string
   role?: Role | null
   regions?: (number | string | { id: number | string })[] | null
+  canManageRooms?: boolean | null
 }
 
 const asRoleUser = (user: unknown) => (user ?? null) as RoleUser | null
@@ -20,6 +21,10 @@ const asRoleUser = (user: unknown) => (user ?? null) as RoleUser | null
 export const isAdmin = (user: unknown) => asRoleUser(user)?.role === 'admin'
 
 export const isRegionManager = (user: unknown) => asRoleUser(user)?.role === 'regionManager'
+
+/** Oda yerleşiminde kişileri odalara atayıp taşıyabilir mi? Admin her zaman; bölge yöneticisi yetki verilirse. */
+export const canManageRooms = (user: unknown) =>
+  isAdmin(user) || (isRegionManager(user) && asRoleUser(user)?.canManageRooms === true)
 
 /** Bölge yöneticisinin sorumlu olduğu bölgelerin id'leri. */
 export function managedRegionIds(user: unknown): (number | string)[] {
@@ -61,10 +66,15 @@ export const adminOrManagedRegion =
     return { [field]: { in: ids } } as Where
   }
 
-/** Özel endpoint'ler (pano, içe/dışa aktarma, kasa, tahsilat) yalnızca admine açık. */
+/** Özel endpoint'ler (içe/dışa aktarma, kasa, tahsilat) yalnızca admine açık. */
 export function requireAdmin(req: PayloadRequest) {
+  requireUser(req, isAdmin)
+}
+
+/** Giriş yapmış ve `allowed` koşulunu sağlayan kullanıcıyı ister; aksi halde 401/403. */
+export function requireUser(req: PayloadRequest, allowed: (user: unknown) => boolean) {
   if (!req.user) throw new APIError('Bu işlem için giriş yapmalısınız.', 401, null, true)
-  if (!isAdmin(req.user)) throw new APIError('Bu işlem için yetkiniz yok.', 403, null, true)
+  if (!allowed(req.user)) throw new APIError('Bu işlem için yetkiniz yok.', 403, null, true)
 }
 
 /** Rol alanından önce oluşturulmuş kullanıcılar admin sayılır. */

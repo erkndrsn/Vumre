@@ -60,6 +60,18 @@ export const Users: CollectionConfig = {
       },
       access: { update: ({ req }) => isAdmin(req.user) },
     },
+    {
+      name: 'canManageRooms',
+      label: 'Oda yerleşimini düzenleyebilir',
+      type: 'checkbox',
+      defaultValue: false,
+      admin: {
+        condition: (data) => data?.role === 'regionManager',
+        description:
+          'Oda yerleşimini her bölge yöneticisi görüntüler; işaretliyse kişileri odalara yerleştirip odalar arasında taşıyabilir.',
+      },
+      access: { update: ({ req }) => isAdmin(req.user) },
+    },
   ],
   hooks: {
     beforeChange: [
@@ -75,6 +87,7 @@ export const Users: CollectionConfig = {
           }
         } else if (data.role === 'admin') {
           data.regions = []
+          data.canManageRooms = false
         }
         return data
       },

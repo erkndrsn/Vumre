@@ -53,10 +53,10 @@ async function handleLogout() {
         <RouterLink to="/umreciler/bolge-listesi" class="nav-link" active-class="active"
           >Bölge Listesi</RouterLink
         >
+        <RouterLink to="/yerlesim" class="nav-link" active-class="active"
+          >Oda Yerleşimi</RouterLink
+        >
         <template v-if="auth.isAdmin">
-          <RouterLink to="/yerlesim" class="nav-link" active-class="active"
-            >Oda Yerleşimi</RouterLink
-          >
           <RouterLink to="/tahsilat" class="nav-link" active-class="active">Tahsilat</RouterLink>
           <RouterLink to="/odeme-takibi" class="nav-link" active-class="active"
             >Ödeme Takibi</RouterLink

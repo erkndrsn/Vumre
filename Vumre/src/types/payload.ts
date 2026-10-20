@@ -31,6 +31,8 @@ export interface User {
   role?: UserRole | null
   /** Bölge yöneticisinin sorumlu olduğu bölgeler. */
   regions?: (number | Region)[] | null
+  /** Bölge yöneticisi oda yerleşiminde kişileri taşıyabilir mi? */
+  canManageRooms?: boolean | null
   createdAt: string
   updatedAt: string
   [key: string]: unknown

@@ -159,6 +159,10 @@ export interface User {
    * Bölge yöneticisi yalnızca bu bölgelere umreci ekler ve bu bölgelerdekileri düzenler; diğer bölgeleri yalnızca görüntüler.
    */
   regions?: (number | Region)[] | null;
+  /**
+   * Oda yerleşimini her bölge yöneticisi görüntüler; işaretliyse kişileri odalara yerleştirip odalar arasında taşıyabilir.
+   */
+  canManageRooms?: boolean | null;
   updatedAt: string;
   createdAt: string;
   email?: string | null;
@@ -647,6 +651,7 @@ export interface UsersSelect<T extends boolean = true> {
   name?: T;
   role?: T;
   regions?: T;
+  canManageRooms?: T;
   updatedAt?: T;
   createdAt?: T;
   email?: T;

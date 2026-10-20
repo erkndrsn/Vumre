@@ -16,6 +16,13 @@ export const useAuthStore = defineStore('auth', () => {
       : [],
   )
 
+  /** Oda yerleşiminde kişileri odalara atayıp taşıyabilir mi? Görüntüleme herkese açık. */
+  const canManageRooms = computed(
+    () =>
+      isAdmin.value ||
+      (user.value?.role === 'regionManager' && user.value.canManageRooms === true),
+  )
+
   /** Bu bölgedeki umrecileri ekleyip düzenleyebilir mi? */
   function canEditRegion(regionId: number | null | undefined) {
     if (isAdmin.value) return true
@@ -67,6 +74,7 @@ export const useAuthStore = defineStore('auth', () => {
     isAuthenticated,
     isAdmin,
     managedRegionIds,
+    canManageRooms,
     canEditRegion,
     fetchMe,
     login,

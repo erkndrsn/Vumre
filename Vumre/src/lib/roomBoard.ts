@@ -10,7 +10,10 @@ import {
 
 import { ageOn, isInfant } from '../utils/childPricing'
 import { notArchived, relationId } from './rooms'
-import { requireAdmin } from './access'
+import { canManageRooms, isAdmin, isRegionManager, requireAdmin, requireUser } from './access'
+
+/** Oda yerleşimini admin ve tüm bölge yöneticileri görür. */
+const canViewBoard = (user: unknown) => isAdmin(user) || isRegionManager(user)
 
 export const MAX_BULK_ROOMS = 500
 export const MAX_ASSIGN = 200
@@ -56,6 +59,8 @@ const badRequest = (message: string) => new APIError(message, 400, null, true)
 /**
  * Pano verisini sabit sayıda sorguyla toplar. Odaların `afterRead` hook'u oda başına
  * sayım yaptığından `skipOccupancy` ile kapatılır; umreciler de odayı populate etmez.
+ * Odalar, oda tipleri ve ödeme grubu adları bölge yöneticisine koleksiyon olarak kapalıdır;
+ * panoda yalnızca burada seçilen alanlarıyla görünür (endpoint erişimi ayrıca denetler).
  */
 export async function getRoomBoard(req: PayloadRequest): Promise<RoomBoard> {
   const [rooms, pilgrims, regions, groups] = await Promise.all([
@@ -65,7 +70,6 @@ export async function getRoomBoard(req: PayloadRequest): Promise<RoomBoard> {
       pagination: false,
       depth: 1,
       context: { skipOccupancy: true },
-      overrideAccess: false,
       req,
     }),
     req.payload.find({
@@ -98,7 +102,6 @@ export async function getRoomBoard(req: PayloadRequest): Promise<RoomBoard> {
       select: { name: true },
       pagination: false,
       depth: 0,
-      overrideAccess: false,
       req,
     }),
   ])
@@ -271,6 +274,9 @@ export async function assignPilgrims(
 
   const toMove = pilgrims.filter((p) => String(relationId(p.room)) !== String(roomId))
 
+  // Yetki endpoint'te denetlenir (`canManageRooms`). Oda alanı ve başka bölgedeki umreciler
+  // bölge yöneticisine REST'te kapalı olduğu için güncelleme erişim kuralları dışında yapılır;
+  // yalnızca `room` yazılır, ücret ve kapasite kuralları yine Pilgrims hook'larında işler.
   const ownsTransaction = await initTransaction(req)
   try {
     for (const p of toMove) {
@@ -279,7 +285,7 @@ export async function assignPilgrims(
         id: p.id,
         data: { room: roomId as number | null },
         depth: 0,
-        overrideAccess: false,
+        context: { roomAssignment: true },
         req,
       })
     }
@@ -295,7 +301,7 @@ export const roomBoardEndpoint: Endpoint = {
   path: '/board',
   method: 'get',
   handler: async (req) => {
-    requireAdmin(req)
+    requireUser(req, canViewBoard)
     return Response.json(await getRoomBoard(req))
   },
 }
@@ -316,7 +322,7 @@ export const assignPilgrimsEndpoint: Endpoint = {
   path: '/assign',
   method: 'post',
   handler: async (req) => {
-    requireAdmin(req)
+    requireUser(req, canManageRooms)
     await addDataAndFileToRequest(req)
     return Response.json(await assignPilgrims(req, req.data ?? {}))
   },

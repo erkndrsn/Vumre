@@ -4,7 +4,7 @@ import config from '@/payload.config'
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
-import { roomBoardEndpoint } from '@/lib/roomBoard'
+import { assignPilgrims, assignPilgrimsEndpoint, roomBoardEndpoint } from '@/lib/roomBoard'
 
 let payload: Payload
 let managerReq: PayloadRequest
@@ -225,20 +225,90 @@ describe('Bölge yöneticisi yetkileri', () => {
       payload.find({ collection: 'payments', req: managerReq, ...asManager }),
     ).rejects.toThrow()
     await expect(
-      Promise.resolve().then(() => roomBoardEndpoint.handler(managerReq)),
+      payload.find({ collection: 'rooms', req: managerReq, ...asManager }),
+    ).rejects.toThrow()
+  })
+
+  it('oda yerleşimini görüntüler; yetki verilmeden kimseyi taşıyamaz', async () => {
+    const other = await createPilgrim('Panoda', otherRegion)
+
+    const res = await roomBoardEndpoint.handler(managerReq)
+    const board = await res.json()
+    expect(board.rooms.map((r: { id: number }) => r.id)).toContain(roomId)
+    expect(board.pilgrims.map((p: { id: number }) => p.id)).toContain(other.id)
+
+    await expect(
+      Promise.resolve().then(() => assignPilgrimsEndpoint.handler(managerReq)),
     ).rejects.toThrow('yetkiniz yok')
   })
 
-  it('kendi rolünü ve bölgelerini değiştiremez', async () => {
+  it('yetki verilince her bölgeden kişiyi odaya yerleştirir ve odadan çıkarır', async () => {
+    const own = await createPilgrim('Yerleşen', ownRegion)
+    const other = await createPilgrim('Komşu', otherRegion)
+    const manager = await payload.update({
+      collection: 'users',
+      id: managerId,
+      data: { canManageRooms: true },
+    })
+    const req = await createLocalReq({ user: { ...manager, collection: 'users' } }, payload)
+
+    try {
+      // Endpoint yetkiyi geçer, gövde boş olduğu için doğrulamada durur.
+      await expect(
+        Promise.resolve().then(() => assignPilgrimsEndpoint.handler(req)),
+      ).rejects.toThrow('Atanacak umrecileri seçin')
+
+      await assignPilgrims(req, { room: roomId, pilgrims: [own.id, other.id] })
+      const placed = await payload.find({
+        collection: 'pilgrims',
+        where: { id: { in: [own.id, other.id] } },
+        depth: 0,
+      })
+      expect(placed.docs.map((p) => p.room)).toEqual([roomId, roomId])
+      // Ücret oda tipinden yazılır; bölge değişmez.
+      expect(placed.docs.map((p) => p.roomPrice)).toEqual([900, 900])
+      expect(placed.docs.find((p) => p.id === other.id)?.region).toBe(otherRegion)
+
+      await assignPilgrims(req, { room: null, pilgrims: [other.id] })
+      const removed = await payload.findByID({ collection: 'pilgrims', id: other.id, depth: 0 })
+      expect(removed.room ?? null).toBeNull()
+
+      // Oda yetkisi kişi bilgisi yetkisi vermez.
+      await expect(
+        payload.update({
+          collection: 'pilgrims',
+          id: other.id,
+          data: { phone: '0000' },
+          req,
+          ...asManager,
+        }),
+      ).rejects.toThrow()
+    } finally {
+      await payload.update({
+        collection: 'pilgrims',
+        where: { id: { in: [own.id, other.id] } },
+        data: { room: null },
+      })
+      await payload.update({ collection: 'users', id: managerId, data: { canManageRooms: false } })
+    }
+  })
+
+  it('kendi rolünü, bölgelerini ve oda yerleşimi yetkisini değiştiremez', async () => {
     const self = await payload.update({
       collection: 'users',
       id: managerId,
-      data: { name: 'Bölge Sorumlusu', role: 'admin', regions: [ownRegion, otherRegion] },
+      data: {
+        name: 'Bölge Sorumlusu',
+        role: 'admin',
+        regions: [ownRegion, otherRegion],
+        canManageRooms: true,
+      },
       req: managerReq,
       ...asManager,
     })
     expect(self.name).toBe('Bölge Sorumlusu')
     expect(self.role).toBe('regionManager')
     expect(self.regions?.map((r) => (typeof r === 'object' ? r.id : r))).toEqual([ownRegion])
+    expect(self.canManageRooms ?? false).toBe(false)
   })
 })

@@ -10,6 +10,7 @@ interface FormState {
   email: string
   password: string
   regions: number[]
+  canManageRooms: boolean
 }
 
 const items = ref<User[]>([])
@@ -27,6 +28,7 @@ const emptyForm = (): FormState => ({
   email: '',
   password: '',
   regions: [],
+  canManageRooms: false,
 })
 const form = reactive<FormState>(emptyForm())
 
@@ -79,6 +81,7 @@ function openEdit(item: User) {
     email: item.email ?? '',
     password: '',
     regions: regionIds(item),
+    canManageRooms: item.canManageRooms === true,
   })
   editingId.value = item.id
   success.value = ''
@@ -100,6 +103,7 @@ async function save() {
     email: form.email.trim() || null,
     role: 'regionManager',
     regions: form.regions,
+    canManageRooms: form.canManageRooms,
   }
   // Düzenlemede şifre boş bırakılırsa değişmez.
   if (form.password) data.password = form.password
@@ -143,9 +147,10 @@ onMounted(load)
     </div>
 
     <p class="muted intro">
-      Bölge yöneticisi yalnızca sorumlu olduğu bölgelerdeki umrecileri görür ve kişi bilgilerini
-      (iletişim, kimlik, uçuş noktası, adres…) güncelleyebilir. Oda ataması, ödemeler ve diğer
-      ekranlar ona kapalıdır.
+      Bölge yöneticisi tüm umrecileri görür; sorumlu olduğu bölgelere umreci ekler ve bu
+      bölgelerdekilerin kişi bilgilerini (iletişim, kimlik, uçuş noktası, adres…) güncelleyebilir.
+      Oda yerleşimini görüntüler; kişileri odalara yerleştirip taşıması için ayrıca yetki
+      verilmelidir. Ödemeler ve diğer ekranlar ona kapalıdır.
     </p>
 
     <div v-if="error" class="alert alert-error" role="alert">{{ error }}</div>
@@ -197,6 +202,17 @@ onMounted(load)
             <span>{{ r.name }}{{ r.active === false ? ' (pasif)' : '' }}</span>
           </label>
         </fieldset>
+        <fieldset class="field span-all">
+          <legend>Oda yerleşimi</legend>
+          <label class="field-check">
+            <input v-model="form.canManageRooms" type="checkbox" />
+            <span>Kişileri odalara yerleştirebilir ve odalar arasında taşıyabilir</span>
+          </label>
+          <small class="muted"
+            >İşaretli değilse oda yerleşimini yalnızca görüntüler. Oda ekleme ve ödeme grubu
+            oluşturma admine aittir.</small
+          >
+        </fieldset>
       </div>
       <div class="form-actions">
         <button type="button" class="btn btn-secondary" @click="showForm = false">Vazgeç</button>
@@ -216,6 +232,7 @@ onMounted(load)
             <th>Kullanıcı adı</th>
             <th>E-posta</th>
             <th>Bölgeler</th>
+            <th>Oda yerleşimi</th>
             <th />
           </tr>
         </thead>
@@ -225,6 +242,7 @@ onMounted(load)
             <td>{{ item.username }}</td>
             <td>{{ item.email || '—' }}</td>
             <td>{{ regionNames(item) }}</td>
+            <td>{{ item.canManageRooms ? 'Düzenleyebilir' : 'Görüntüler' }}</td>
             <td class="actions">
               <button class="btn btn-secondary btn-sm" @click="openEdit(item)">Düzenle</button>
               <button class="btn btn-danger btn-sm" @click="destroy(item)">Sil</button>

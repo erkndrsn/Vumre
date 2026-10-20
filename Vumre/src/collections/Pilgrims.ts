@@ -263,9 +263,9 @@ export const Pilgrims: CollectionConfig = {
   hooks: {
     beforeChange: [
       // Bölge yöneticisi umreciyi yalnızca sorumlu olduğu bölgelere ekleyip bu bölgeler arasında
-      // taşıyabilir.
-      ({ data, req }) => {
-        if (!req.user || isAdmin(req.user)) return data
+      // taşıyabilir. Oda yerleşimindeki atama yalnızca odayı yazar; bölgeye dokunmaz.
+      ({ data, req, context }) => {
+        if (!req.user || isAdmin(req.user) || context.roomAssignment) return data
         const regionId = relationId(data.region)
         if (!managedRegionIds(req.user).some((id) => String(id) === String(regionId))) {
           throw new ValidationError({
