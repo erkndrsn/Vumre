@@ -40,22 +40,19 @@ async function handleLogout() {
 
     <div class="app-body">
       <nav class="sidebar" aria-label="Ana menü">
-        <template v-if="auth.isAdmin">
-          <RouterLink to="/" class="nav-link" exact-active-class="active">Panel</RouterLink>
-          <RouterLink
-            to="/umreciler"
-            class="nav-link"
-            active-class=""
-            :class="{ active: pilgrimsActive }"
-            >Umreciler</RouterLink
-          >
-        </template>
+        <RouterLink to="/" class="nav-link" exact-active-class="active">Panel</RouterLink>
+        <RouterLink
+          v-if="auth.isAdmin"
+          to="/umreciler"
+          class="nav-link"
+          active-class=""
+          :class="{ active: pilgrimsActive }"
+          >Umreciler</RouterLink
+        >
         <RouterLink to="/umreciler/bolge-listesi" class="nav-link" active-class="active"
           >Bölge Listesi</RouterLink
         >
-        <RouterLink to="/yerlesim" class="nav-link" active-class="active"
-          >Oda Yerleşimi</RouterLink
-        >
+        <RouterLink to="/yerlesim" class="nav-link" active-class="active">Oda Yerleşimi</RouterLink>
         <template v-if="auth.isAdmin">
           <RouterLink to="/tahsilat" class="nav-link" active-class="active">Tahsilat</RouterLink>
           <RouterLink to="/odeme-takibi" class="nav-link" active-class="active"

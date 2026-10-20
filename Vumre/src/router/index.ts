@@ -42,7 +42,7 @@ const router = createRouter({
           path: '',
           name: 'dashboard',
           component: () => import('@/views/DashboardView.vue'),
-          meta: { title: 'Panel' },
+          meta: { title: 'Panel', regionManager: true },
         },
         {
           path: 'umreciler',
@@ -155,9 +155,9 @@ router.beforeEach(async (to) => {
     return { name: 'login', query: to.fullPath !== '/' ? { redirect: to.fullPath } : {} }
   }
   if (auth.isAuthenticated && GUEST_ONLY.has(to.name as string)) {
-    return auth.isAdmin ? { name: 'dashboard' } : { name: 'pilgrims-by-region' }
+    return { name: 'dashboard' }
   }
-  // Bölge yöneticisi yalnızca bölge listesine, umreci düzenlemeye ve oda yerleşimine girer.
+  // Bölge yöneticisi yalnızca panele, bölge listesine, umreci düzenlemeye ve oda yerleşimine girer.
   if (auth.isAuthenticated && !auth.isAdmin && !to.meta.public && !to.meta.regionManager) {
     return { name: 'pilgrims-by-region' }
   }

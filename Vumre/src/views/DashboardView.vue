@@ -20,7 +20,20 @@ const cashboxes = ref<CashboxBalance[]>([])
 const loading = ref(false)
 const error = ref('')
 
+const isAdmin = computed(() => auth.isAdmin)
+
+/** Bölge yöneticisinin sorumlu olduğu bölgelerdeki umreciler; admin için herkes. */
+const ownPilgrims = computed(() => {
+  if (isAdmin.value) return board.value.pilgrims
+  const ids = new Set(auth.managedRegionIds.map(String))
+  return board.value.pilgrims.filter((p) => p.region && ids.has(String(p.region.id)))
+})
+
+/** Oda doluluğu her zaman otelin tamamı için; umreci sayıları yöneticide kendi bölgeleri için. */
 const stay = computed(() => summarizeAccommodation(board.value.rooms, board.value.pilgrims))
+const own = computed(() =>
+  isAdmin.value ? stay.value : summarizeAccommodation([], ownPilgrims.value),
+)
 const money = computed(() => summarizeMoney(accounts.value))
 const activeCashboxes = computed(() => cashboxes.value.filter((c) => c.active))
 const cashTotals = computed(() => totalsByCurrency(activeCashboxes.value))
@@ -43,6 +56,11 @@ async function load() {
   loading.value = true
   error.value = ''
   try {
+    // Tahsilat, hesap ve kasa verisi yalnızca admine açık; bölge yöneticisi panoyu görür.
+    if (!isAdmin.value) {
+      board.value = await getRoomBoard()
+      return
+    }
     const [b, a, r, c] = await Promise.all([
       getRoomBoard(),
       getAccounts(),
@@ -78,25 +96,28 @@ onMounted(load)
     <div v-if="error" class="alert alert-error" role="alert">{{ error }}</div>
 
     <div class="tiles">
-      <RouterLink :to="{ name: 'pilgrims' }" class="card tile tile-link">
-        <span class="muted">Toplam umreci</span>
-        <strong class="value">{{ num.format(stay.pilgrims) }}</strong>
+      <RouterLink
+        :to="{ name: isAdmin ? 'pilgrims' : 'pilgrims-by-region' }"
+        class="card tile tile-link"
+      >
+        <span class="muted">{{ isAdmin ? 'Toplam umreci' : 'Bölgelerimdeki umreci' }}</span>
+        <strong class="value">{{ num.format(own.pilgrims) }}</strong>
         <span class="muted small">
-          {{ num.format(stay.male) }} erkek · {{ num.format(stay.female) }} kadın
-          <template v-if="stay.children"> · {{ num.format(stay.children) }} çocuk</template>
-          <template v-if="stay.infants"> (+ {{ num.format(stay.infants) }} bebek)</template>
+          {{ num.format(own.male) }} erkek · {{ num.format(own.female) }} kadın
+          <template v-if="own.children"> · {{ num.format(own.children) }} çocuk</template>
+          <template v-if="own.infants"> (+ {{ num.format(own.infants) }} bebek)</template>
         </span>
       </RouterLink>
 
       <RouterLink :to="{ name: 'room-board' }" class="card tile tile-link">
         <span class="muted">Odası atanmamış</span>
-        <strong class="value" :class="{ warn: stay.unassigned }">
-          {{ num.format(stay.unassigned) }}
+        <strong class="value" :class="{ warn: own.unassigned }">
+          {{ num.format(own.unassigned) }}
         </strong>
-        <span class="muted small">{{ num.format(stay.assigned) }} umreci odaya yerleşti</span>
+        <span class="muted small">{{ num.format(own.assigned) }} umreci odaya yerleşti</span>
       </RouterLink>
 
-      <RouterLink :to="{ name: 'rooms' }" class="card tile tile-link">
+      <RouterLink :to="{ name: isAdmin ? 'rooms' : 'room-board' }" class="card tile tile-link">
         <span class="muted">Dolu oda</span>
         <strong class="value">
           {{ num.format(stay.full) }}<small class="muted"> / {{ num.format(stay.rooms) }}</small>
@@ -119,46 +140,48 @@ onMounted(load)
       </div>
     </div>
 
-    <h2 class="section-title">Mali durum</h2>
-    <div v-if="money.length" class="money">
-      <div v-for="m in money" :key="m.currency" class="card money-card">
-        <div class="money-head">
-          <h3>{{ m.currency }}</h3>
-          <span class="muted small">Tahsilat oranı {{ percent(m.paid, m.total) }}</span>
+    <template v-if="isAdmin">
+      <h2 class="section-title">Mali durum</h2>
+      <div v-if="money.length" class="money">
+        <div v-for="m in money" :key="m.currency" class="card money-card">
+          <div class="money-head">
+            <h3>{{ m.currency }}</h3>
+            <span class="muted small">Tahsilat oranı {{ percent(m.paid, m.total) }}</span>
+          </div>
+          <span class="track" aria-hidden="true">
+            <span class="fill fill-success" :style="{ width: percent(m.paid, m.total) }" />
+          </span>
+          <dl>
+            <div>
+              <dt>Toplam tutar</dt>
+              <dd>{{ formatMoney(m.total, m.currency) }}</dd>
+            </div>
+            <div>
+              <dt>Toplam tahsilat</dt>
+              <dd class="ok">{{ formatMoney(m.paid, m.currency) }}</dd>
+            </div>
+            <div>
+              <dt>Kalan alacak ({{ num.format(m.openAccounts) }} hesap)</dt>
+              <dd :class="{ due: m.open > 0 }">{{ formatMoney(m.open, m.currency) }}</dd>
+            </div>
+            <div v-if="m.overpaid">
+              <dt>Fazla ödeme</dt>
+              <dd class="warn">{{ formatMoney(m.overpaid, m.currency) }}</dd>
+            </div>
+            <div v-if="m.advance">
+              <dt>Ön ödeme (oda bekleyen)</dt>
+              <dd class="ok">{{ formatMoney(m.advance, m.currency) }}</dd>
+            </div>
+          </dl>
         </div>
-        <span class="track" aria-hidden="true">
-          <span class="fill fill-success" :style="{ width: percent(m.paid, m.total) }" />
-        </span>
-        <dl>
-          <div>
-            <dt>Toplam tutar</dt>
-            <dd>{{ formatMoney(m.total, m.currency) }}</dd>
-          </div>
-          <div>
-            <dt>Toplam tahsilat</dt>
-            <dd class="ok">{{ formatMoney(m.paid, m.currency) }}</dd>
-          </div>
-          <div>
-            <dt>Kalan alacak ({{ num.format(m.openAccounts) }} hesap)</dt>
-            <dd :class="{ due: m.open > 0 }">{{ formatMoney(m.open, m.currency) }}</dd>
-          </div>
-          <div v-if="m.overpaid">
-            <dt>Fazla ödeme</dt>
-            <dd class="warn">{{ formatMoney(m.overpaid, m.currency) }}</dd>
-          </div>
-          <div v-if="m.advance">
-            <dt>Ön ödeme (oda bekleyen)</dt>
-            <dd class="ok">{{ formatMoney(m.advance, m.currency) }}</dd>
-          </div>
-        </dl>
       </div>
-    </div>
-    <p v-else-if="!loading" class="card empty-state">
-      Odaya atanmış umreci olmadığı için tutar yok.
-    </p>
+      <p v-else-if="!loading" class="card empty-state">
+        Odaya atanmış umreci olmadığı için tutar yok.
+      </p>
+    </template>
 
     <div class="panels">
-      <div class="card panel table-wrap">
+      <div v-if="isAdmin" class="card panel table-wrap">
         <div class="panel-head">
           <h2>Kasalar</h2>
           <RouterLink :to="{ name: 'cash' }" class="link-small">Kasa</RouterLink>
@@ -189,7 +212,9 @@ onMounted(load)
       <div class="card panel table-wrap">
         <div class="panel-head">
           <h2>Oda tiplerine göre doluluk</h2>
-          <RouterLink :to="{ name: 'room-types' }" class="link-small">Oda tipleri</RouterLink>
+          <RouterLink :to="{ name: isAdmin ? 'room-types' : 'room-board' }" class="link-small">{{
+            isAdmin ? 'Oda tipleri' : 'Oda yerleşimi'
+          }}</RouterLink>
         </div>
         <p v-if="!stay.byType.length" class="empty-state">Henüz aktif oda yok.</p>
         <table v-else class="table">
@@ -231,24 +256,28 @@ onMounted(load)
 
       <div class="card panel">
         <div class="panel-head">
-          <h2>Bölgelere göre umreciler</h2>
-          <RouterLink :to="{ name: 'regions' }" class="link-small">Bölgeler</RouterLink>
+          <h2>{{ isAdmin ? 'Bölgelere göre umreciler' : 'Bölgelerim' }}</h2>
+          <RouterLink
+            :to="{ name: isAdmin ? 'regions' : 'pilgrims-by-region' }"
+            class="link-small"
+            >{{ isAdmin ? 'Bölgeler' : 'Bölge listesi' }}</RouterLink
+          >
         </div>
-        <p v-if="!stay.byRegion.length" class="empty-state">Henüz umreci kaydı yok.</p>
+        <p v-if="!own.byRegion.length" class="empty-state">Henüz umreci kaydı yok.</p>
         <ul v-else class="bars">
-          <li v-for="r in stay.byRegion" :key="r.name">
+          <li v-for="r in own.byRegion" :key="r.name">
             <div class="bar-head">
               <span>{{ r.name }}</span>
               <strong>{{ num.format(r.count) }}</strong>
             </div>
             <span class="track" aria-hidden="true">
-              <span class="fill" :style="{ width: percent(r.count, stay.pilgrims) }" />
+              <span class="fill" :style="{ width: percent(r.count, own.pilgrims) }" />
             </span>
           </li>
         </ul>
       </div>
 
-      <div class="card panel table-wrap">
+      <div v-if="isAdmin" class="card panel table-wrap">
         <div class="panel-head">
           <h2>Son tahsilatlar</h2>
           <RouterLink :to="{ name: 'payments' }" class="link-small">Tümü</RouterLink>
