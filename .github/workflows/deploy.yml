@@ -41,8 +41,13 @@ jobs:
         working-directory: C:\apps\Vumre
         run: |
           # Process PM2'de kayıtlı değilse (ilk kurulum) stop hata verir; ilk seferde yok sayılır.
-          pm2 describe vumre *> $null
-          $registered = ($LASTEXITCODE -eq 0)
+          # Actions PowerShell'i 'Stop' modunda; PM2'nin stderr uyarısı adımı düşürmesin diye gevşetiyoruz.
+          $prevEap = $ErrorActionPreference
+          $ErrorActionPreference = 'Continue'
+          $desc = (pm2 describe vumre 2>&1 | Out-String)
+          $registered = ($LASTEXITCODE -eq 0 -and $desc -notmatch "doesn't exist")
+          $ErrorActionPreference = $prevEap
+          Write-Host "PM2'de vumre kayitli: $registered"
           if ($registered) { pm2 stop ecosystem.config.cjs }
           $ok = $true
           try {
