@@ -33,6 +33,12 @@ const dateKey = (value: unknown) =>
 const requiredRegion: RelationshipFieldSingleValidation = (value, args) =>
   value ? relationship(value, args) : 'Bölge seçin.'
 
+// Oda seçimi filterOptions ile odalar koleksiyonu kullanıcı adına sorgulanarak doğrulanır; odaları
+// yalnızca admin okuyabildiği için bölge yöneticisinin güncellemesinde kayıtlı oda "geçersiz seçim"
+// sayılırdı. Yönetici odayı değiştiremez (alan erişimi eski değeri geri koyar), denetim gereksiz.
+const roomSelection: RelationshipFieldSingleValidation = (value, args) =>
+  isAdmin(args.req.user) || args.overrideAccess ? relationship(value, args) : true
+
 export const Pilgrims: CollectionConfig = {
   slug: 'pilgrims',
   labels: { singular: 'Umreci', plural: 'Umreciler' },
@@ -153,6 +159,7 @@ export const Pilgrims: CollectionConfig = {
       index: true,
       // Seçim listesinde yalnızca aktif ve boş yeri olan odalar çıkar. Bebekler kapasiteden
       // yer tutmadığı için dolu odalar da seçilebilir.
+      validate: roomSelection,
       filterOptions: async ({ id, req, data }) => {
         if (isInfant(data?.birthDate)) return { active: { equals: true } }
         const fullRoomIds = await findFullRoomIds(req, id || undefined)

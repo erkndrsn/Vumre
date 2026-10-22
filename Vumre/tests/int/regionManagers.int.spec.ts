@@ -153,6 +153,22 @@ describe('Bölge yöneticisi yetkileri', () => {
     expect(updated.archived).toBe(false)
   })
 
+  it('odaya yerleşmiş umrecinin kişi bilgilerini günceller, oda korunur', async () => {
+    const own = await createPilgrim('Odalı', ownRegion)
+    await payload.update({ collection: 'pilgrims', id: own.id, data: { room: roomId } })
+
+    const updated = await payload.update({
+      collection: 'pilgrims',
+      id: own.id,
+      data: { phone: '05554443322', room: roomId },
+      req: managerReq,
+      ...asManager,
+    })
+    expect(updated.phone).toBe('05554443322')
+    expect(updated.room).toBe(roomId)
+    await payload.update({ collection: 'pilgrims', id: own.id, data: { room: null } })
+  })
+
   it('başka bölgedeki umreciyi güncelleyemez ve umreciyi başka bölgeye taşıyamaz', async () => {
     const own = await createPilgrim('Taşınan', ownRegion)
     const other = await createPilgrim('Yabancı', otherRegion)
