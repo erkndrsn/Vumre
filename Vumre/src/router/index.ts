@@ -163,7 +163,18 @@ router.beforeEach(async (to) => {
   }
 })
 
+// Yeni sürüm yayınlanınca açık sekmeler eski chunk adlarını ister; sayfa bir kez yenilenip
+// güncel index.html alınır. Yenilemeden sonra yine hata olursa döngüye girmemek için durulur.
+const CHUNK_RELOAD_KEY = 'vumre:chunk-reload'
+router.onError((error, to) => {
+  if (!/dynamically imported module|Importing a module script failed/i.test(String(error?.message))) return
+  if (sessionStorage.getItem(CHUNK_RELOAD_KEY) === to.fullPath) return
+  sessionStorage.setItem(CHUNK_RELOAD_KEY, to.fullPath)
+  window.location.assign(to.fullPath)
+})
+
 router.afterEach((to) => {
+  sessionStorage.removeItem(CHUNK_RELOAD_KEY)
   document.title = to.meta.title ? `${to.meta.title} · Vumre` : 'Vumre'
 })
 

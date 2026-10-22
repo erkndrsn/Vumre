@@ -17,11 +17,12 @@ const nextConfig: NextConfig = {
   },
   // Vue arayüzü (vite build → public/index.html) aynı porttan sunulur.
   // /api ve /admin Payload rotalarıdır; geri kalan her yol SPA'ya düşer.
+  // /spa/ (Vite chunk'ları) hariç: eksik bir chunk index.html değil 404 dönsün.
   async rewrites() {
     return {
       beforeFiles: [{ source: '/', destination: '/index.html' }],
       afterFiles: [],
-      fallback: [{ source: '/:path((?!api/|admin|_next/).*)', destination: '/index.html' }],
+      fallback: [{ source: '/:path((?!api/|admin|_next/|spa/).*)', destination: '/index.html' }],
     }
   },
   webpack: (webpackConfig) => {
