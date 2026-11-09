@@ -78,6 +78,7 @@ export interface Config {
     'payment-groups': PaymentGroup;
     cashboxes: Cashbox;
     payments: Payment;
+    'payment-receipts': PaymentReceipt;
     expenses: Expense;
     'cash-transfers': CashTransfer;
     'payload-kv': PayloadKv;
@@ -95,6 +96,9 @@ export interface Config {
     'payment-groups': {
       members: 'pilgrims';
     };
+    payments: {
+      receipts: 'payment-receipts';
+    };
   };
   collectionsSelect: {
     users: UsersSelect<false> | UsersSelect<true>;
@@ -108,6 +112,7 @@ export interface Config {
     'payment-groups': PaymentGroupsSelect<false> | PaymentGroupsSelect<true>;
     cashboxes: CashboxesSelect<false> | CashboxesSelect<true>;
     payments: PaymentsSelect<false> | PaymentsSelect<true>;
+    'payment-receipts': PaymentReceiptsSelect<false> | PaymentReceiptsSelect<true>;
     expenses: ExpensesSelect<false> | ExpensesSelect<true>;
     'cash-transfers': CashTransfersSelect<false> | CashTransfersSelect<true>;
     'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
@@ -419,6 +424,11 @@ export interface Payment {
   method: 'cash' | 'transfer' | 'card';
   receiptNo?: string | null;
   note?: string | null;
+  receipts?: {
+    docs?: (number | PaymentReceipt)[];
+    hasNextPage?: boolean;
+    totalDocs?: number;
+  };
   receivedBy?: (number | null) | User;
   updatedAt: string;
   createdAt: string;
@@ -442,6 +452,35 @@ export interface Cashbox {
   note?: string | null;
   updatedAt: string;
   createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "payment-receipts".
+ */
+export interface PaymentReceipt {
+  id: number;
+  payment: number | Payment;
+  updatedAt: string;
+  createdAt: string;
+  url?: string | null;
+  thumbnailURL?: string | null;
+  filename?: string | null;
+  mimeType?: string | null;
+  filesize?: number | null;
+  width?: number | null;
+  height?: number | null;
+  focalX?: number | null;
+  focalY?: number | null;
+  sizes?: {
+    thumbnail?: {
+      url?: string | null;
+      width?: number | null;
+      height?: number | null;
+      mimeType?: string | null;
+      filesize?: number | null;
+      filename?: string | null;
+    };
+  };
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -592,6 +631,10 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'payments';
         value: number | Payment;
+      } | null)
+    | ({
+        relationTo: 'payment-receipts';
+        value: number | PaymentReceipt;
       } | null)
     | ({
         relationTo: 'expenses';
@@ -870,9 +913,42 @@ export interface PaymentsSelect<T extends boolean = true> {
   method?: T;
   receiptNo?: T;
   note?: T;
+  receipts?: T;
   receivedBy?: T;
   updatedAt?: T;
   createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "payment-receipts_select".
+ */
+export interface PaymentReceiptsSelect<T extends boolean = true> {
+  payment?: T;
+  updatedAt?: T;
+  createdAt?: T;
+  url?: T;
+  thumbnailURL?: T;
+  filename?: T;
+  mimeType?: T;
+  filesize?: T;
+  width?: T;
+  height?: T;
+  focalX?: T;
+  focalY?: T;
+  sizes?:
+    | T
+    | {
+        thumbnail?:
+          | T
+          | {
+              url?: T;
+              width?: T;
+              height?: T;
+              mimeType?: T;
+              filesize?: T;
+              filename?: T;
+            };
+      };
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema

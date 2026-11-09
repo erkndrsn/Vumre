@@ -117,6 +117,14 @@ export const Payments: CollectionConfig = {
     },
     { name: 'note', label: 'Not', type: 'textarea' },
     {
+      name: 'receipts',
+      label: 'Dekontlar',
+      type: 'join',
+      collection: 'payment-receipts',
+      on: 'payment',
+      defaultSort: 'createdAt',
+    },
+    {
       name: 'receivedBy',
       label: 'Tahsil eden',
       type: 'relationship',
@@ -243,6 +251,16 @@ export const Payments: CollectionConfig = {
         }
         if (operation === 'create' && req.user) data.receivedBy = req.user.id
         return data
+      },
+    ],
+    beforeDelete: [
+      // Dekontlar dosyalarıyla birlikte silinir.
+      async ({ id, req }) => {
+        await req.payload.delete({
+          collection: 'payment-receipts',
+          where: { payment: { equals: id } },
+          req,
+        })
       },
     ],
   },

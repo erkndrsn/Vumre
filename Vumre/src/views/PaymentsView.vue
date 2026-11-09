@@ -2,7 +2,14 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { listCashboxes } from '@/api/cashboxes'
-import { createPayment, deletePayment, getAccounts, listPayments } from '@/api/payments'
+import {
+  createPayment,
+  deletePayment,
+  getAccounts,
+  listPayments,
+  uploadReceipt,
+} from '@/api/payments'
+import PaymentReceiptsCell from './PaymentReceiptsCell.vue'
 import type {
   AccountBalance,
   Cashbox,
@@ -54,6 +61,14 @@ const historyLoading = ref(false)
 const saving = ref(false)
 const error = ref('')
 const success = ref('')
+/** Tahsilatla birlikte yüklenecek dekontlar. */
+const receiptFiles = ref<File[]>([])
+const receiptInput = ref<HTMLInputElement | null>(null)
+
+function setReceiptFiles(files: File[]) {
+  receiptFiles.value = files
+  if (!files.length && receiptInput.value) receiptInput.value.value = ''
+}
 
 /** `currency` cinsinden aktif kasalar. */
 function cashboxesIn(currency: string | null | undefined) {
@@ -286,7 +301,7 @@ async function save() {
   error.value = ''
   success.value = ''
   try {
-    await createPayment({
+    const payment = await createPayment({
       pilgrim: form.payer,
       amount: form.amount,
       currency: form.currency || null,
@@ -299,6 +314,14 @@ async function save() {
     rememberCashbox(currency, form.cashbox)
     const box = cashboxes.value.find((c) => c.id === form.cashbox)
     success.value = `${current.name} için ${formatMoney(form.amount, currency)} tahsil edildi${box ? ` (${box.name})` : ''}.`
+    // Tahsilat kaydedildi; dekont yüklenemezse ödeme geçmişinden yeniden eklenebilir.
+    try {
+      for (const file of receiptFiles.value) await uploadReceipt(payment.id, file)
+    } catch (e) {
+      const reason = e instanceof Error ? ` (${e.message})` : ''
+      error.value = `Tahsilat kaydedildi ancak dekont yüklenemedi${reason}. Ödeme geçmişinden yeniden ekleyebilirsiniz.`
+    }
+    setReceiptFiles([])
     await Promise.all([refreshSelected(), loadRecent()])
     await loadHistory()
     Object.assign(form, emptyForm(selected.value))
@@ -356,6 +379,7 @@ watch(
   () => selected.value?.key,
   async () => {
     Object.assign(form, emptyForm(selected.value))
+    setReceiptFiles([])
     await loadHistory()
   },
 )
@@ -556,6 +580,42 @@ onMounted(async () => {
             <span>Makbuz / dekont no</span>
             <input v-model="form.receiptNo" />
           </label>
+          <div class="field">
+            <span>Dekont</span>
+            <div class="receipt-pick">
+              <input
+                ref="receiptInput"
+                type="file"
+                accept="image/*,application/pdf"
+                multiple
+                hidden
+                @change="
+                  setReceiptFiles(Array.from(($event.target as HTMLInputElement).files ?? []))
+                "
+              />
+              <button
+                type="button"
+                class="btn btn-secondary btn-sm"
+                :disabled="saving"
+                @click="receiptInput?.click()"
+              >
+                {{ receiptFiles.length ? 'Değiştir' : 'Dosya seç' }}
+              </button>
+              <span v-if="receiptFiles.length" class="muted small receipt-names">
+                {{ receiptFiles.map((f) => f.name).join(', ') }}
+              </span>
+              <button
+                v-if="receiptFiles.length"
+                type="button"
+                class="btn btn-secondary btn-sm"
+                :disabled="saving"
+                @click="setReceiptFiles([])"
+              >
+                Kaldır
+              </button>
+              <span v-else class="muted small">Resim veya PDF (isteğe bağlı)</span>
+            </div>
+          </div>
           <label class="field span-all">
             <span>Not</span>
             <textarea v-model="form.note" rows="2" />
@@ -579,7 +639,11 @@ onMounted(async () => {
           Ödeme grubun toplam borcundan düşer; kişilere ayrıca dağıtılmaz.
         </p>
         <p v-if="!formCashboxes.length" class="small warn">
-          {{ (currencyOptions.length ? currencyOptions : [form.currency || selected.currency]).join(', ') }}
+          {{
+            (currencyOptions.length ? currencyOptions : [form.currency || selected.currency]).join(
+              ', ',
+            )
+          }}
           cinsinden aktif kasa yok; tahsilat için önce
           <RouterLink to="/kasa">Kasa</RouterLink> sayfasından kasa açın.
         </p>
@@ -621,6 +685,7 @@ onMounted(async () => {
               <th class="num">Tutar</th>
               <th>Kasa</th>
               <th>Makbuz no</th>
+              <th>Dekont</th>
               <th>Not</th>
               <th>Tahsil eden</th>
               <th />
@@ -636,6 +701,14 @@ onMounted(async () => {
               </td>
               <td>{{ cashboxOf(p) }}</td>
               <td>{{ p.receiptNo || '—' }}</td>
+              <td>
+                <PaymentReceiptsCell
+                  :payment="p"
+                  editable
+                  @changed="loadHistory"
+                  @error="error = $event"
+                />
+              </td>
               <td>{{ p.note || '—' }}</td>
               <td>{{ receiverOf(p) }}</td>
               <td class="actions">
@@ -659,6 +732,7 @@ onMounted(async () => {
             <th class="num">Tutar</th>
             <th>Kasa</th>
             <th>Makbuz no</th>
+            <th>Dekont</th>
             <th>Tahsil eden</th>
             <th />
           </tr>
@@ -673,6 +747,7 @@ onMounted(async () => {
             </td>
             <td>{{ cashboxOf(p) }}</td>
             <td>{{ p.receiptNo || '—' }}</td>
+            <td><PaymentReceiptsCell :payment="p" /></td>
             <td>{{ receiverOf(p) }}</td>
             <td class="actions">
               <button class="btn btn-secondary btn-sm" @click="openPilgrim(pilgrimIdOf(p))">
@@ -817,6 +892,22 @@ h2 {
 
 .small {
   font-size: 0.875rem;
+}
+
+.receipt-pick {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.25rem;
+}
+
+.receipt-names {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 16rem;
 }
 
 .hint {

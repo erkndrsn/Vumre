@@ -15,6 +15,7 @@ import { PilgrimDocuments } from './collections/PilgrimDocuments'
 import { Regions } from './collections/Regions'
 import { FlightPoints } from './collections/FlightPoints'
 import { Payments } from './collections/Payments'
+import { PaymentReceipts } from './collections/PaymentReceipts'
 import { PaymentGroups } from './collections/PaymentGroups'
 import { Expenses } from './collections/Expenses'
 import { Cashboxes } from './collections/Cashboxes'
@@ -70,6 +71,7 @@ export default buildConfig({
     PaymentGroups,
     Cashboxes,
     Payments,
+    PaymentReceipts,
     Expenses,
     CashTransfers,
   ],

@@ -1,4 +1,4 @@
-import type { AccountBalance, Payment, PilgrimBalance } from '@/types/payload'
+import type { AccountBalance, Payment, PaymentReceipt, PilgrimBalance } from '@/types/payload'
 import { create, find, remove } from './collections'
 import { request } from './client'
 
@@ -42,4 +42,16 @@ export function createPayment(
 
 export function deletePayment(id: number) {
   return remove<Payment>('payments', id)
+}
+
+/** Dekontu Payload'un beklediği multipart biçimde (`file` + `_payload`) tahsilata ekler. */
+export function uploadReceipt(payment: number, file: File) {
+  const body = new FormData()
+  body.append('file', file)
+  body.append('_payload', JSON.stringify({ payment }))
+  return create<PaymentReceipt>('payment-receipts', body)
+}
+
+export function removeReceipt(id: number) {
+  return remove<PaymentReceipt>('payment-receipts', id)
 }

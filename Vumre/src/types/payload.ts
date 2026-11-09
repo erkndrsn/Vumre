@@ -278,7 +278,22 @@ export interface Payment {
   method: PaymentMethod
   receiptNo?: string | null
   note?: string | null
+  /** Yüklenen dekontlar (join alanı; depth ≥ 1 ile dolu gelir). */
+  receipts?: { docs?: (number | PaymentReceipt)[] | null } | null
   receivedBy?: number | User | null
+  createdAt: string
+  updatedAt: string
+}
+
+/** Tahsilat dekontu (havale dekontu, makbuz fotoğrafı veya PDF). */
+export interface PaymentReceipt {
+  id: number
+  payment: number | Payment
+  url?: string | null
+  filename?: string | null
+  mimeType?: string | null
+  filesize?: number | null
+  sizes?: { thumbnail?: { url?: string | null } }
   createdAt: string
   updatedAt: string
 }
