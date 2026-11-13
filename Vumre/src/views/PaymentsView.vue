@@ -7,6 +7,7 @@ import {
   deletePayment,
   getAccounts,
   listPayments,
+  updatePayment,
   uploadReceipt,
 } from '@/api/payments'
 import PaymentReceiptsCell from './PaymentReceiptsCell.vue'
@@ -64,6 +65,9 @@ const success = ref('')
 /** Tahsilatla birlikte yüklenecek dekontlar. */
 const receiptFiles = ref<File[]>([])
 const receiptInput = ref<HTMLInputElement | null>(null)
+/** Formda düzenlenen tahsilat; `null` ise form yeni tahsilat alır. */
+const editing = ref<Payment | null>(null)
+const formEl = ref<HTMLFormElement | null>(null)
 
 function setReceiptFiles(files: File[]) {
   receiptFiles.value = files
@@ -166,11 +170,18 @@ const currencyOptions = computed<string[]>(() => {
   return selected.value?.currency ? [selected.value.currency] : [...CURRENCIES]
 })
 
-/** Kalan borcun `currency` cinsinden karşılığı (oda ücretlerinin oranıyla). */
-function remainingIn(currency: string) {
+/**
+ * Kalan borcun `currency` cinsinden karşılığı (oda ücretlerinin oranıyla). Bir tahsilat
+ * düzenlenirken onun borçtan düştüğü tutar kalana geri eklenir.
+ */
+function remainingIn(currency: string, includeEdited = true) {
   const account = selected.value
-  if (!account || account.balance <= 0) return null
-  return convertFromDebt(account.balance, account, currency)
+  if (!account || account.price == null) return null
+  const p = includeEdited ? editing.value : null
+  const balance =
+    account.balance + (p && p.debtCurrency === account.currency ? (p.debtAmount ?? 0) : 0)
+  if (balance <= 0) return null
+  return convertFromDebt(balance, account, currency)
 }
 
 const formRemaining = computed(() => remainingIn(form.currency))
@@ -183,14 +194,19 @@ const formCashboxes = computed(() => {
   const currencies = currencyOptions.value.length
     ? currencyOptions.value
     : [form.currency || selected.value?.currency]
-  return currencies.flatMap((c) => cashboxesIn(c))
+  const list = currencies.flatMap((c) => cashboxesIn(c))
+  // Düzenlenen tahsilatın kasası sonradan pasife alınmış olsa da seçili kalır.
+  const ownId = editing.value ? relationIdOf(editing.value.cashbox) : null
+  const own =
+    ownId && !list.some((c) => c.id === ownId) ? cashboxes.value.find((c) => c.id === ownId) : null
+  return own ? [own, ...list] : list
 })
 
 /** Kalan borcun diğer para birimlerindeki karşılıkları ("460 EUR · 17.500 TRY"). */
 const remainingOthers = computed(() =>
   payable.value
     .slice(1)
-    .map((c) => formatMoney(remainingIn(c.currency), c.currency))
+    .map((c) => formatMoney(remainingIn(c.currency, false), c.currency))
     .join(' · '),
 )
 
@@ -293,15 +309,44 @@ function openPilgrim(id: number) {
   router.replace({ query: { pilgrim: String(id) } })
 }
 
+function relationIdOf(value: number | { id: number } | null | undefined) {
+  return value && typeof value === 'object' ? value.id : (value ?? null)
+}
+
+/** Tahsilatı forma yükler; kaydedince yeni tahsilat yerine bu kayıt güncellenir. */
+function startEdit(p: Payment) {
+  editing.value = p
+  success.value = ''
+  error.value = ''
+  setReceiptFiles([])
+  Object.assign(form, {
+    payer: pilgrimIdOf(p),
+    currency: p.currency ?? '',
+    amount: p.amount,
+    paidAt: todayInputValue(new Date(p.paidAt)),
+    cashbox: relationIdOf(p.cashbox),
+    receiptNo: p.receiptNo ?? '',
+    note: p.note ?? '',
+  } satisfies FormState)
+  formEl.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
+function cancelEdit() {
+  editing.value = null
+  setReceiptFiles([])
+  Object.assign(form, emptyForm(selected.value))
+}
+
 async function save() {
   const current = selected.value
   if (!current || form.amount === null || form.payer === null || form.cashbox === null) return
   const currency = form.currency || current.currency!
+  const edited = editing.value
   saving.value = true
   error.value = ''
   success.value = ''
   try {
-    const payment = await createPayment({
+    const data = {
       pilgrim: form.payer,
       amount: form.amount,
       currency: form.currency || null,
@@ -310,10 +355,14 @@ async function save() {
       paidAt: `${form.paidAt}T12:00:00.000Z`,
       receiptNo: form.receiptNo.trim() || null,
       note: form.note.trim() || null,
-    })
+    }
+    const payment = edited ? await updatePayment(edited.id, data) : await createPayment(data)
     rememberCashbox(currency, form.cashbox)
     const box = cashboxes.value.find((c) => c.id === form.cashbox)
-    success.value = `${current.name} için ${formatMoney(form.amount, currency)} tahsil edildi${box ? ` (${box.name})` : ''}.`
+    success.value = edited
+      ? `${formatDate(edited.paidAt)} tarihli tahsilat güncellendi: ${formatMoney(form.amount, currency)}${box ? ` (${box.name})` : ''}.`
+      : `${current.name} için ${formatMoney(form.amount, currency)} tahsil edildi${box ? ` (${box.name})` : ''}.`
+    editing.value = null
     // Tahsilat kaydedildi; dekont yüklenemezse ödeme geçmişinden yeniden eklenebilir.
     try {
       for (const file of receiptFiles.value) await uploadReceipt(payment.id, file)
@@ -326,7 +375,8 @@ async function save() {
     await loadHistory()
     Object.assign(form, emptyForm(selected.value))
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Tahsilat kaydedilemedi.'
+    error.value =
+      e instanceof Error ? e.message : `Tahsilat ${edited ? 'güncellenemedi' : 'kaydedilemedi'}.`
   } finally {
     saving.value = false
   }
@@ -339,6 +389,7 @@ async function destroy(payment: Payment) {
   success.value = ''
   try {
     await deletePayment(payment.id)
+    if (editing.value?.id === payment.id) cancelEdit()
     if (selected.value) {
       await Promise.all([refreshSelected(), loadRecent()])
       await loadHistory()
@@ -357,7 +408,8 @@ async function destroy(payment: Payment) {
 watch(
   () => form.currency,
   () => {
-    form.amount = formRemaining.value
+    // Düzenlenen tahsilatın tutarı kendiliğinden değiştirilmez.
+    if (!editing.value) form.amount = formRemaining.value
     const currency = form.currency || selected.value?.currency
     const box = cashboxes.value.find((c) => c.id === form.cashbox)
     if (box?.currency !== currency) form.cashbox = pickCashbox(currency)
@@ -378,6 +430,7 @@ watch(
 watch(
   () => selected.value?.key,
   async () => {
+    editing.value = null
     Object.assign(form, emptyForm(selected.value))
     setReceiptFiles([])
     await loadHistory()
@@ -536,8 +589,22 @@ onMounted(async () => {
         </div>
       </div>
 
-      <form v-if="canCollect" class="card form" @submit.prevent="save">
-        <h2>Tahsilat al</h2>
+      <form
+        v-if="canCollect || editing"
+        ref="formEl"
+        class="card form"
+        :class="{ editing }"
+        @submit.prevent="save"
+      >
+        <h2>
+          <template v-if="editing">
+            Tahsilatı düzenle
+            <small class="muted">
+              {{ formatDate(editing.paidAt) }} · {{ formatMoney(editing.amount, editing.currency) }}
+            </small>
+          </template>
+          <template v-else>Tahsilat al</template>
+        </h2>
         <div class="form-grid">
           <label v-if="isGroup" class="field">
             <span>Ödeyen</span>
@@ -649,7 +716,16 @@ onMounted(async () => {
         </p>
         <div class="form-actions">
           <button
-            v-if="!isAdvance"
+            v-if="editing"
+            type="button"
+            class="btn btn-secondary"
+            :disabled="saving"
+            @click="cancelEdit"
+          >
+            Vazgeç
+          </button>
+          <button
+            v-if="!isAdvance && formRemaining"
             type="button"
             class="btn btn-secondary"
             :disabled="saving"
@@ -662,7 +738,7 @@ onMounted(async () => {
             class="btn btn-primary"
             :disabled="saving || !form.amount || !form.payer || !form.cashbox"
           >
-            {{ saving ? 'Kaydediliyor…' : 'Tahsilatı kaydet' }}
+            {{ saving ? 'Kaydediliyor…' : editing ? 'Değişiklikleri kaydet' : 'Tahsilatı kaydet' }}
           </button>
         </div>
       </form>
@@ -692,7 +768,7 @@ onMounted(async () => {
             </tr>
           </thead>
           <tbody>
-            <tr v-for="p in history" :key="p.id">
+            <tr v-for="p in history" :key="p.id" :class="{ 'row-editing': editing?.id === p.id }">
               <td>{{ formatDate(p.paidAt) }}</td>
               <td v-if="isGroup">{{ pilgrimName(p) || '—' }}</td>
               <td class="num">
@@ -712,6 +788,13 @@ onMounted(async () => {
               <td>{{ p.note || '—' }}</td>
               <td>{{ receiverOf(p) }}</td>
               <td class="actions">
+                <button
+                  class="btn btn-secondary btn-sm"
+                  :disabled="saving || editing?.id === p.id"
+                  @click="startEdit(p)"
+                >
+                  Düzenle
+                </button>
                 <button class="btn btn-danger btn-sm" @click="destroy(p)">Sil</button>
               </td>
             </tr>
@@ -888,6 +971,21 @@ h2 {
 
 .notice {
   padding: 1rem 1.5rem;
+}
+
+.form.editing {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+}
+
+h2 small {
+  font-size: 0.875rem;
+  font-weight: 400;
+  margin-left: 0.375rem;
+}
+
+.row-editing td {
+  background: var(--color-hover);
 }
 
 .small {

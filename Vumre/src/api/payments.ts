@@ -1,5 +1,5 @@
 import type { AccountBalance, Payment, PaymentReceipt, PilgrimBalance } from '@/types/payload'
-import { create, find, remove } from './collections'
+import { create, find, remove, update } from './collections'
 import { request } from './client'
 
 /** Tüm umrecilerin (veya yalnız `pilgrim`in) oda ücretine göre borç özeti. */
@@ -38,6 +38,17 @@ export function createPayment(
     >,
 ) {
   return create<Payment>('payments', data)
+}
+
+export function updatePayment(
+  id: number,
+  data: Partial<
+    Pick<Payment, 'pilgrim' | 'amount' | 'paidAt' | 'currency' | 'receiptNo' | 'note'>
+  > & {
+    cashbox?: number
+  },
+) {
+  return update<Payment>('payments', id, data)
 }
 
 export function deletePayment(id: number) {
