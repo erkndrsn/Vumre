@@ -60,7 +60,8 @@ export async function getAgencyPilgrims(req: PayloadRequest): Promise<AgencyPilg
         kind: { equals: 'idCard' },
         pilgrim: { in: pilgrims.map((p) => p.id) },
       },
-      select: { pilgrim: true, url: true, mimeType: true, sizes: true },
+      // `url` dosya adından hesaplanır; filename seçilmezse null döner.
+      select: { pilgrim: true, filename: true, url: true, mimeType: true, sizes: true },
       pagination: false,
       depth: 0,
       req,
