@@ -20,6 +20,7 @@ interface PilgrimLike {
   /** Bugünkü yaş; bilinmiyorsa null (yetişkin sayılır). */
   age: number | null
   infant: boolean
+  flightPoint?: { id: Id; name: string } | null
 }
 
 interface AccountLike {
@@ -62,6 +63,15 @@ export interface AccommodationSummary {
   occupiedBeds: number
   byType: RoomTypeSummary[]
   byRegion: { name: string; count: number }[]
+  /** Uçuş noktasına göre kişi sayısı (bebekler hariç) ve ayrıca bebek sayısı. */
+  byFlightPoint: FlightPointSummary[]
+}
+
+export interface FlightPointSummary {
+  key: string
+  name: string
+  count: number
+  infants: number
 }
 
 export interface CurrencySummary {
@@ -92,6 +102,7 @@ export function summarizeAccommodation(
 ): AccommodationSummary {
   const occupiedByRoom = new Map<string, number>()
   const regions = new Map<string, { name: string; count: number }>()
+  const flightPoints = new Map<string, FlightPointSummary>()
   const s: AccommodationSummary = {
     pilgrims: 0,
     male: 0,
@@ -108,14 +119,26 @@ export function summarizeAccommodation(
     occupiedBeds: 0,
     byType: [],
     byRegion: [],
+    byFlightPoint: [],
   }
 
   for (const p of pilgrims) {
+    const flightKey = p.flightPoint ? String(p.flightPoint.id) : ''
+    const flight = flightPoints.get(flightKey) ?? {
+      key: flightKey,
+      name: p.flightPoint?.name ?? 'Uçuş noktası seçilmemiş',
+      count: 0,
+      infants: 0,
+    }
+    flightPoints.set(flightKey, flight)
+
     // Bebekler kontenjandan yer tutmaz; umreci sayılarına girmez, ayrıca gösterilir.
     if (p.infant) {
       s.infants++
+      flight.infants++
       continue
     }
+    flight.count++
     s.pilgrims++
     if (p.age !== null && p.age <= CHILD_MAX_AGE) s.children++
     else if (p.gender === 'male') s.male++
@@ -163,6 +186,13 @@ export function summarizeAccommodation(
   s.byType = [...types.values()].sort((a, b) => a.name.localeCompare(b.name, 'tr'))
   s.byRegion = [...regions.values()].sort(
     (a, b) => b.count - a.count || a.name.localeCompare(b.name, 'tr'),
+  )
+  // Uçuş noktası seçilmemişler en sonda.
+  s.byFlightPoint = [...flightPoints.values()].sort(
+    (a, b) =>
+      Number(a.key === '') - Number(b.key === '') ||
+      b.count - a.count ||
+      a.name.localeCompare(b.name, 'tr'),
   )
   return s
 }

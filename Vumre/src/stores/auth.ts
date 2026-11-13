@@ -10,6 +10,8 @@ export const useAuthStore = defineStore('auth', () => {
   // Bölge yöneticisi tüm umrecileri görür, yalnızca kendi bölgelerindekileri ekler ve düzenler;
   // geri kalan her şey admine ait.
   const isAdmin = computed(() => user.value?.role === 'admin')
+  /** Acente umreci listesini (kısıtlı alanlarla) ve oda yerleşimini salt okunur görür. */
+  const isAgency = computed(() => user.value?.role === 'agency')
   const managedRegionIds = computed(() =>
     user.value?.role === 'regionManager'
       ? (user.value.regions ?? []).map((r) => (typeof r === 'object' ? r.id : r))
@@ -73,6 +75,7 @@ export const useAuthStore = defineStore('auth', () => {
     initialized,
     isAuthenticated,
     isAdmin,
+    isAgency,
     managedRegionIds,
     canManageRooms,
     canEditRegion,

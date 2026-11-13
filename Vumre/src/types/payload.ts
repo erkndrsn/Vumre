@@ -18,8 +18,11 @@ import type {
 // İpucu: Payload reposunda `payload generate:types` ile üretilen `payload-types.ts`
 // dosyası bu klasöre kopyalanıp koleksiyon tipleri oradan kullanılabilir.
 
-/** admin: tüm sistem; regionManager: yalnızca sorumlu olduğu bölgelerin umrecileri. */
-export type UserRole = 'admin' | 'regionManager'
+/**
+ * admin: tüm sistem; regionManager: yalnızca sorumlu olduğu bölgelerin umrecileri;
+ * agency: umreci listesi (kısıtlı alanlar) ve oda yerleşimi, salt okunur.
+ */
+export type UserRole = 'admin' | 'regionManager' | 'agency'
 
 export interface User {
   id: number | string
@@ -223,6 +226,18 @@ export interface PilgrimDocument {
   updatedAt: string
 }
 
+// Acente umreci listesi (backend: src/lib/agency.ts)
+
+export interface AgencyPilgrim {
+  id: number
+  firstName: string
+  lastName: string
+  birthDate: string | null
+  flightPoint: { id: number; name: string } | null
+  roomNumber: string | null
+  idCard: { url: string; thumbnailUrl: string | null; mimeType: string | null } | null
+}
+
 // Oda yerleşim panosu (backend: src/lib/roomBoard.ts)
 
 export interface BoardRoom {
@@ -245,6 +260,8 @@ export interface BoardPilgrim {
   /** 0-1 yaş; kapasiteden yer tutmaz. */
   infant: boolean
   paymentGroup: { id: number; name: string } | null
+  /** Kişinin uçağa bineceği havalimanı. */
+  flightPoint: { id: number; name: string } | null
 }
 
 export interface RoomBoard {

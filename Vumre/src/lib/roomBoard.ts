@@ -10,10 +10,17 @@ import {
 
 import { ageOn, isInfant } from '../utils/childPricing'
 import { notArchived, relationId } from './rooms'
-import { canManageRooms, isAdmin, isRegionManager, requireAdmin, requireUser } from './access'
+import {
+  canManageRooms,
+  isAdmin,
+  isAgency,
+  isRegionManager,
+  requireAdmin,
+  requireUser,
+} from './access'
 
-/** Oda yerleşimini admin ve tüm bölge yöneticileri görür. */
-const canViewBoard = (user: unknown) => isAdmin(user) || isRegionManager(user)
+/** Oda yerleşimini admin, tüm bölge yöneticileri ve acenteler görür. */
+const canViewBoard = (user: unknown) => isAdmin(user) || isRegionManager(user) || isAgency(user)
 
 export const MAX_BULK_ROOMS = 500
 export const MAX_ASSIGN = 200
@@ -40,6 +47,8 @@ export interface BoardPilgrim {
   /** 0-1 yaş; kapasiteden yer tutmaz. */
   infant: boolean
   paymentGroup: { id: Id; name: string } | null
+  /** Kişinin uçağa bineceği havalimanı. */
+  flightPoint: { id: Id; name: string } | null
 }
 
 /** Yerleşim panosunun tüm verisi: odalar ve umreciler; doluluk istemcide `room` alanından sayılır. */
@@ -61,9 +70,12 @@ const badRequest = (message: string) => new APIError(message, 400, null, true)
  * sayım yaptığından `skipOccupancy` ile kapatılır; umreciler de odayı populate etmez.
  * Odalar, oda tipleri ve ödeme grubu adları bölge yöneticisine koleksiyon olarak kapalıdır;
  * panoda yalnızca burada seçilen alanlarıyla görünür (endpoint erişimi ayrıca denetler).
+ * Acentenin umreci koleksiyonuna erişimi yoktur; panoda bölge ve ödeme grubu görmez.
  */
 export async function getRoomBoard(req: PayloadRequest): Promise<RoomBoard> {
-  const [rooms, pilgrims, regions, groups] = await Promise.all([
+  const agency = isAgency(req.user)
+  const none = { docs: [] as { id: Id; name: string }[] }
+  const [rooms, pilgrims, regions, groups, flightPoints] = await Promise.all([
     req.payload.find({
       collection: 'rooms',
       sort: 'roomNumber',
@@ -82,23 +94,36 @@ export async function getRoomBoard(req: PayloadRequest): Promise<RoomBoard> {
         room: true,
         birthDate: true,
         paymentGroup: true,
+        flightPoint: true,
       },
       sort: 'fullName',
       pagination: false,
       depth: 0,
-      overrideAccess: false,
+      overrideAccess: agency,
       req,
     }),
+    agency
+      ? none
+      : req.payload.find({
+          collection: 'regions',
+          select: { name: true },
+          pagination: false,
+          depth: 0,
+          overrideAccess: false,
+          req,
+        }),
+    agency
+      ? none
+      : req.payload.find({
+          collection: 'payment-groups',
+          select: { name: true },
+          pagination: false,
+          depth: 0,
+          req,
+        }),
+    // Uçuş noktaları giriş yapmış herkese açık.
     req.payload.find({
-      collection: 'regions',
-      select: { name: true },
-      pagination: false,
-      depth: 0,
-      overrideAccess: false,
-      req,
-    }),
-    req.payload.find({
-      collection: 'payment-groups',
+      collection: 'flight-points',
       select: { name: true },
       pagination: false,
       depth: 0,
@@ -108,6 +133,7 @@ export async function getRoomBoard(req: PayloadRequest): Promise<RoomBoard> {
 
   const regionById = new Map(regions.docs.map((r) => [String(r.id), r]))
   const groupById = new Map(groups.docs.map((g) => [String(g.id), g]))
+  const flightPointById = new Map(flightPoints.docs.map((f) => [String(f.id), f]))
 
   return {
     rooms: rooms.docs.map((r) => {
@@ -126,6 +152,7 @@ export async function getRoomBoard(req: PayloadRequest): Promise<RoomBoard> {
       const region = regionId !== null ? regionById.get(String(regionId)) : undefined
       const groupId = relationId(p.paymentGroup)
       const group = groupId !== null ? groupById.get(String(groupId)) : undefined
+      const flightPoint = flightPointById.get(String(relationId(p.flightPoint)))
       return {
         id: p.id,
         fullName: p.fullName ?? '',
@@ -135,6 +162,7 @@ export async function getRoomBoard(req: PayloadRequest): Promise<RoomBoard> {
         age: ageOn(p.birthDate),
         infant: isInfant(p.birthDate),
         paymentGroup: group ? { id: group.id, name: group.name } : null,
+        flightPoint: flightPoint ? { id: flightPoint.id, name: flightPoint.name } : null,
       }
     }),
   }

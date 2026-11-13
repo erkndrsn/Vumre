@@ -46,6 +46,21 @@ describe('auth store', () => {
     expect(store.isAuthenticated).toBe(true)
   })
 
+  it('acente admin değildir, bölgesi ve oda yerleşimi yetkisi yoktur', async () => {
+    vi.mocked(authApi.login).mockResolvedValue({
+      user: { ...user, role: 'agency', regions: [3], canManageRooms: true },
+    })
+    const store = useAuthStore()
+
+    await store.login('acente', 'secret')
+
+    expect(store.isAgency).toBe(true)
+    expect(store.isAdmin).toBe(false)
+    expect(store.managedRegionIds).toEqual([])
+    expect(store.canManageRooms).toBe(false)
+    expect(store.canEditRegion(3)).toBe(false)
+  })
+
   it('logout sunucu hata verse bile oturumu temizler', async () => {
     vi.mocked(authApi.login).mockResolvedValue({ user })
     vi.mocked(authApi.logout).mockRejectedValue(new ApiError('down', 0))

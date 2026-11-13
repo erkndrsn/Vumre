@@ -159,7 +159,7 @@ export interface UserAuthOperations {
 export interface User {
   id: number;
   name?: string | null;
-  role?: ('admin' | 'regionManager') | null;
+  role?: ('admin' | 'regionManager' | 'agency') | null;
   /**
    * Bölge yöneticisi yalnızca bu bölgelere umreci ekler ve bu bölgelerdekileri düzenler; diğer bölgeleri yalnızca görüntüler.
    */

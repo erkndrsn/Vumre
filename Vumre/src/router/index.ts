@@ -10,6 +10,8 @@ declare module 'vue-router' {
     title?: string
     /** true ise bölge yöneticisi de girebilir. Varsayılan: sayfa yalnızca admine açık. */
     regionManager?: boolean
+    /** true ise acente de girebilir. */
+    agency?: boolean
   }
 }
 
@@ -42,7 +44,7 @@ const router = createRouter({
           path: '',
           name: 'dashboard',
           component: () => import('@/views/DashboardView.vue'),
-          meta: { title: 'Panel', regionManager: true },
+          meta: { title: 'Panel', regionManager: true, agency: true },
         },
         {
           path: 'umreciler',
@@ -72,7 +74,13 @@ const router = createRouter({
           path: 'yerlesim',
           name: 'room-board',
           component: () => import('@/views/RoomBoardView.vue'),
-          meta: { title: 'Oda Yerleşimi', regionManager: true },
+          meta: { title: 'Oda Yerleşimi', regionManager: true, agency: true },
+        },
+        {
+          path: 'acente/umreciler',
+          name: 'agency-pilgrims',
+          component: () => import('@/views/AgencyPilgrimsView.vue'),
+          meta: { title: 'Umreciler', agency: true },
         },
         {
           path: 'tahsilat',
@@ -117,6 +125,12 @@ const router = createRouter({
           meta: { title: 'Bölge Yöneticileri' },
         },
         {
+          path: 'acente-kullanicilari',
+          name: 'agency-users',
+          component: () => import('@/views/AgencyUsersView.vue'),
+          meta: { title: 'Acente Kullanıcıları' },
+        },
+        {
           path: 'ucus-noktalari',
           name: 'flight-points',
           component: () => import('@/views/FlightPointsView.vue'),
@@ -138,7 +152,7 @@ const router = createRouter({
           path: ':pathMatch(.*)*',
           name: 'not-found',
           component: () => import('@/views/NotFoundView.vue'),
-          meta: { title: 'Sayfa bulunamadı', regionManager: true },
+          meta: { title: 'Sayfa bulunamadı', regionManager: true, agency: true },
         },
       ],
     },
@@ -157,8 +171,14 @@ router.beforeEach(async (to) => {
   if (auth.isAuthenticated && GUEST_ONLY.has(to.name as string)) {
     return { name: 'dashboard' }
   }
+  if (!auth.isAuthenticated || auth.isAdmin || to.meta.public) return
+  // Acente yalnızca panele, kendi umreci listesine ve oda yerleşimine girer.
+  if (auth.isAgency) {
+    if (!to.meta.agency) return { name: 'agency-pilgrims' }
+    return
+  }
   // Bölge yöneticisi yalnızca panele, bölge listesine, umreci düzenlemeye ve oda yerleşimine girer.
-  if (auth.isAuthenticated && !auth.isAdmin && !to.meta.public && !to.meta.regionManager) {
+  if (!to.meta.regionManager) {
     return { name: 'pilgrims-by-region' }
   }
 })

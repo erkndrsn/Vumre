@@ -21,10 +21,17 @@ const loading = ref(false)
 const error = ref('')
 
 const isAdmin = computed(() => auth.isAdmin)
+const isAgency = computed(() => auth.isAgency)
+/** Bölge yöneticisine kendi bölgelerinin sayıları ayrıca gösterilir. */
+const isRegionManager = computed(() => !isAdmin.value && !isAgency.value)
+/** Umreci kutusunun bağlantısı: admin tüm liste, acente kendi listesi, yönetici bölge listesi. */
+const pilgrimsRoute = computed(() =>
+  isAdmin.value ? 'pilgrims' : isAgency.value ? 'agency-pilgrims' : 'pilgrims-by-region',
+)
 
-/** Bölge yöneticisinin sorumlu olduğu bölgelerdeki umreciler; admin için herkes. */
+/** Bölge yöneticisinin sorumlu olduğu bölgelerdeki umreciler; admin ve acente için herkes. */
 const ownPilgrims = computed(() => {
-  if (isAdmin.value) return board.value.pilgrims
+  if (!isRegionManager.value) return board.value.pilgrims
   const ids = new Set(auth.managedRegionIds.map(String))
   return board.value.pilgrims.filter((p) => p.region && ids.has(String(p.region.id)))
 })
@@ -32,7 +39,7 @@ const ownPilgrims = computed(() => {
 /** Oda doluluğu her zaman otelin tamamı için; umreci sayıları yöneticide kendi bölgeleri için. */
 const stay = computed(() => summarizeAccommodation(board.value.rooms, board.value.pilgrims))
 const own = computed(() =>
-  isAdmin.value ? stay.value : summarizeAccommodation([], ownPilgrims.value),
+  isRegionManager.value ? summarizeAccommodation([], ownPilgrims.value) : stay.value,
 )
 const money = computed(() => summarizeMoney(accounts.value))
 const activeCashboxes = computed(() => cashboxes.value.filter((c) => c.active))
@@ -56,7 +63,7 @@ async function load() {
   loading.value = true
   error.value = ''
   try {
-    // Tahsilat, hesap ve kasa verisi yalnızca admine açık; bölge yöneticisi panoyu görür.
+    // Tahsilat, hesap ve kasa verisi yalnızca admine açık; bölge yöneticisi ve acente panoyu görür.
     if (!isAdmin.value) {
       board.value = await getRoomBoard()
       return
@@ -98,7 +105,7 @@ onMounted(load)
     <div class="tiles">
       <!-- Bölge yöneticisi tüm bölgelerin toplamını da, kendi bölgelerininkini de görür. -->
       <RouterLink
-        v-if="!isAdmin"
+        v-if="isRegionManager"
         :to="{ name: 'pilgrims-by-region', query: { region: 'all' } }"
         class="card tile tile-link"
       >
@@ -111,11 +118,8 @@ onMounted(load)
         </span>
       </RouterLink>
 
-      <RouterLink
-        :to="{ name: isAdmin ? 'pilgrims' : 'pilgrims-by-region' }"
-        class="card tile tile-link"
-      >
-        <span class="muted">{{ isAdmin ? 'Toplam umreci' : 'Bölgelerimdeki umreci' }}</span>
+      <RouterLink :to="{ name: pilgrimsRoute }" class="card tile tile-link">
+        <span class="muted">{{ isRegionManager ? 'Bölgelerimdeki umreci' : 'Toplam umreci' }}</span>
         <strong class="value">{{ num.format(own.pilgrims) }}</strong>
         <span class="muted small">
           {{ num.format(own.male) }} erkek · {{ num.format(own.female) }} kadın
@@ -269,7 +273,7 @@ onMounted(load)
         </table>
       </div>
 
-      <div class="card panel">
+      <div v-if="!isAgency" class="card panel">
         <div class="panel-head">
           <h2>{{ isAdmin ? 'Bölgelere göre umreciler' : 'Bölgelerim' }}</h2>
           <RouterLink
@@ -287,6 +291,38 @@ onMounted(load)
             </div>
             <span class="track" aria-hidden="true">
               <span class="fill" :style="{ width: percent(r.count, own.pilgrims) }" />
+            </span>
+          </li>
+        </ul>
+      </div>
+
+      <div class="card panel">
+        <div class="panel-head">
+          <h2>
+            {{
+              isRegionManager ? 'Bölgelerimin uçuş noktaları' : 'Uçuş noktalarına göre umreciler'
+            }}
+          </h2>
+          <RouterLink v-if="isAdmin" :to="{ name: 'flight-points' }" class="link-small"
+            >Uçuş noktaları</RouterLink
+          >
+        </div>
+        <p v-if="!own.byFlightPoint.length" class="empty-state">Henüz umreci kaydı yok.</p>
+        <ul v-else class="bars">
+          <li v-for="f in own.byFlightPoint" :key="f.key">
+            <div class="bar-head">
+              <span :class="{ muted: !f.key }">{{ f.name }}</span>
+              <strong>
+                {{ num.format(f.count)
+                }}<small v-if="f.infants" class="muted"> + {{ num.format(f.infants) }} bebek</small>
+              </strong>
+            </div>
+            <span class="track" aria-hidden="true">
+              <span
+                class="fill"
+                :class="{ 'fill-muted': !f.key }"
+                :style="{ width: percent(f.count, own.pilgrims) }"
+              />
             </span>
           </li>
         </ul>
@@ -384,6 +420,14 @@ onMounted(load)
 
 .fill-success {
   background: var(--color-success);
+}
+
+.fill-muted {
+  background: var(--color-muted);
+}
+
+.bar-head small {
+  font-weight: 400;
 }
 
 .section-title {

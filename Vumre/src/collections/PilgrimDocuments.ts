@@ -2,7 +2,7 @@ import path from 'path'
 import { fileURLToPath } from 'url'
 import { ValidationError, type CollectionConfig } from 'payload'
 
-import { adminOrManagedRegion, isAdmin, managedRegionIds } from '../lib/access'
+import { adminOrManagedRegion, isAdmin, isAgency, managedRegionIds } from '../lib/access'
 import { relationId } from '../lib/rooms'
 
 const dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -10,13 +10,16 @@ const dirname = path.dirname(fileURLToPath(import.meta.url))
 /**
  * Umrecinin kimlik resmi ve diğer dokümanları (pasaport, vize, sağlık raporu vb.).
  * Kişisel veri olduğu için Media'nın aksine herkese açık değildir: dosyayı yalnızca admin ve
- * umrecinin bölgesinden sorumlu bölge yöneticisi görebilir.
+ * umrecinin bölgesinden sorumlu bölge yöneticisi görebilir. Acente yalnızca kimlik resimlerini görür.
  */
 export const PilgrimDocuments: CollectionConfig = {
   slug: 'pilgrim-documents',
   labels: { singular: 'Umreci dokümanı', plural: 'Umreci dokümanları' },
   access: {
-    read: adminOrManagedRegion('pilgrim.region'),
+    read: (args) =>
+      isAgency(args.req.user)
+        ? { kind: { equals: 'idCard' } }
+        : adminOrManagedRegion('pilgrim.region')(args),
     update: adminOrManagedRegion('pilgrim.region'),
     delete: adminOrManagedRegion('pilgrim.region'),
     // Seçilen umrecinin yöneticinin bölgesinde olduğu beforeChange'de denetlenir.

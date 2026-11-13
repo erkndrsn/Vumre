@@ -49,7 +49,14 @@ async function handleLogout() {
           :class="{ active: pilgrimsActive }"
           >Umreciler</RouterLink
         >
-        <RouterLink to="/umreciler/bolge-listesi" class="nav-link" active-class="active"
+        <RouterLink
+          v-if="auth.isAgency"
+          to="/acente/umreciler"
+          class="nav-link"
+          active-class="active"
+          >Umreciler</RouterLink
+        >
+        <RouterLink v-else to="/umreciler/bolge-listesi" class="nav-link" active-class="active"
           >Bölge Listesi</RouterLink
         >
         <RouterLink to="/yerlesim" class="nav-link" active-class="active">Oda Yerleşimi</RouterLink>
@@ -72,6 +79,9 @@ async function handleLogout() {
           >
           <RouterLink to="/bolge-yoneticileri" class="nav-link" active-class="active"
             >Bölge Yöneticileri</RouterLink
+          >
+          <RouterLink to="/acente-kullanicilari" class="nav-link" active-class="active"
+            >Acente Kullanıcıları</RouterLink
           >
         </template>
       </nav>

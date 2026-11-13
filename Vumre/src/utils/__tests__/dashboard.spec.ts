@@ -74,6 +74,27 @@ describe('summarizeAccommodation', () => {
   })
 })
 
+describe('summarizeAccommodation uçuş noktaları', () => {
+  const ist = { id: 1, name: 'İstanbul' }
+  const adb = { id: 2, name: 'İzmir' }
+  const at = (flightPoint: typeof ist | null, extra: Parameters<typeof pilgrim>[1] = {}) => ({
+    ...pilgrim(null, extra),
+    flightPoint,
+  })
+
+  it('uçuş noktasına göre sayar; bebekler ayrı, seçilmemişler en sonda', () => {
+    const s = summarizeAccommodation(
+      [],
+      [at(adb), at(null), at(null), at(null), at(ist), at(ist, { infant: true }), at(ist)],
+    )
+    expect(s.byFlightPoint).toEqual([
+      { key: '1', name: 'İstanbul', count: 2, infants: 1 },
+      { key: '2', name: 'İzmir', count: 1, infants: 0 },
+      { key: '', name: 'Uçuş noktası seçilmemiş', count: 3, infants: 0 },
+    ])
+  })
+})
+
 describe('summarizeMoney', () => {
   it('para birimine göre toplam, tahsilat ve kalanı hesaplar', () => {
     expect(

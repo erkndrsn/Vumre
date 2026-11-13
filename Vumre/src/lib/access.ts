@@ -7,7 +7,7 @@ import {
   type Where,
 } from 'payload'
 
-export type Role = 'admin' | 'regionManager'
+export type Role = 'admin' | 'regionManager' | 'agency'
 
 interface RoleUser {
   id: number | string
@@ -21,6 +21,9 @@ const asRoleUser = (user: unknown) => (user ?? null) as RoleUser | null
 export const isAdmin = (user: unknown) => asRoleUser(user)?.role === 'admin'
 
 export const isRegionManager = (user: unknown) => asRoleUser(user)?.role === 'regionManager'
+
+/** Acente: umreci listesini (kısıtlı alanlarla) ve oda yerleşimini salt okunur görür. */
+export const isAgency = (user: unknown) => asRoleUser(user)?.role === 'agency'
 
 /** Oda yerleşiminde kişileri odalara atayıp taşıyabilir mi? Admin her zaman; bölge yöneticisi yetki verilirse. */
 export const canManageRooms = (user: unknown) =>

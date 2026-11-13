@@ -11,6 +11,8 @@ import { GENDER_LABELS, expandRoomRange } from '@/utils/accommodation'
 // oluşturma admine açıktır.
 const auth = useAuthStore()
 const isAdmin = computed(() => auth.isAdmin)
+/** Acente bölge ve ödeme grubu görmez (sunucu da göndermez). */
+const showRegion = computed(() => !auth.isAgency)
 const canEdit = computed(() => auth.canManageRooms)
 
 type Density = 'compact' | 'comfortable'
@@ -568,7 +570,7 @@ onMounted(async () => {
             aria-label="İsim veya oda numarası ara"
           />
           <div class="pool-filters">
-            <select v-model="regionFilter" aria-label="Bölgeye göre filtrele">
+            <select v-if="showRegion" v-model="regionFilter" aria-label="Bölgeye göre filtrele">
               <option value="">Tüm bölgeler</option>
               <option v-for="r in regions" :key="r.id" :value="r.id">{{ r.name }}</option>
             </select>
@@ -615,8 +617,9 @@ onMounted(async () => {
                 >{{ p.fullName }}<span v-if="p.infant" class="infant-tag">bebek</span></span
               >
               <span class="muted region"
-                >{{ p.region?.name ?? '—'
-                }}<template v-if="p.age !== null"> · {{ p.age }} yaş</template
+                ><template v-if="showRegion">{{ p.region?.name ?? '—' }}</template
+                ><template v-if="p.age !== null"
+                  >{{ showRegion ? ' · ' : '' }}{{ p.age }} yaş</template
                 ><span
                   v-if="p.paymentGroup"
                   class="group-tag"
@@ -777,7 +780,7 @@ onMounted(async () => {
                     infant: p.infant,
                   }"
                   :draggable="canEdit"
-                  :title="`${p.fullName}${p.age !== null ? ` · ${p.age} yaş` : ''} · ${p.region?.name ?? 'bölge yok'}${p.infant ? ' · bebek, yatak tutmaz' : ''}${p.paymentGroup ? ` · ödeme grubu: ${p.paymentGroup.name}` : ''}`"
+                  :title="`${p.fullName}${p.age !== null ? ` · ${p.age} yaş` : ''}${showRegion ? ` · ${p.region?.name ?? 'bölge yok'}` : ''}${p.infant ? ' · bebek, yatak tutmaz' : ''}${p.paymentGroup ? ` · ödeme grubu: ${p.paymentGroup.name}` : ''}`"
                   @dragstart="onDragStart($event, p)"
                   @dragend="onDragEnd"
                 >

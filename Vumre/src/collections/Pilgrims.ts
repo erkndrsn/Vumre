@@ -15,6 +15,7 @@ import {
   isRegionManager,
   managedRegionIds,
 } from '../lib/access'
+import { agencyPilgrimsEndpoint } from '../lib/agency'
 import { assignPilgrimsEndpoint } from '../lib/roomBoard'
 import { exportPilgrimsEndpoint } from '../lib/pilgrimExport'
 import { importPilgrimsEndpoint, importTemplateEndpoint } from '../lib/pilgrimImport'
@@ -45,6 +46,7 @@ export const Pilgrims: CollectionConfig = {
   access: {
     // Bölge yöneticisi tüm umrecileri görür; yalnızca kendi bölgelerindekileri ekler ve kişi
     // bilgilerini düzenler. Seçilen bölgenin kendi bölgesi olduğu beforeChange'de denetlenir.
+    // Acentenin koleksiyona erişimi yoktur; kısıtlı alanları /pilgrims/agency'den alır.
     read: ({ req }) => isAdmin(req.user) || isRegionManager(req.user),
     update: adminOrManagedRegion('region'),
     create: ({ req }) => isAdmin(req.user) || managedRegionIds(req.user).length > 0,
@@ -73,6 +75,7 @@ export const Pilgrims: CollectionConfig = {
     importPilgrimsEndpoint,
     exportPilgrimsEndpoint,
     assignPilgrimsEndpoint,
+    agencyPilgrimsEndpoint,
   ],
   fields: [
     {

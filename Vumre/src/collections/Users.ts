@@ -41,6 +41,7 @@ export const Users: CollectionConfig = {
       options: [
         { label: 'Admin', value: 'admin' },
         { label: 'Bölge yöneticisi', value: 'regionManager' },
+        { label: 'Acente', value: 'agency' },
       ],
       access: {
         // Admin kendi rolünü düşüremez.
@@ -85,7 +86,7 @@ export const Users: CollectionConfig = {
               ],
             })
           }
-        } else if (data.role === 'admin') {
+        } else if (data.role === 'admin' || data.role === 'agency') {
           data.regions = []
           data.canManageRooms = false
         }
