@@ -2,6 +2,7 @@ import type {
   AccountBalance as AccountBalanceOf,
   BalanceStatus,
   CurrencyPrice,
+  PaymentKind,
   PaymentMethod,
 } from '@/utils/payments'
 import type {
@@ -278,16 +279,18 @@ export interface BulkRoomsResult {
 
 // Tahsilat / borç takibi (backend: src/collections/Payments.ts, src/lib/payments.ts)
 
-export type { BalanceStatus, CurrencyPrice, PaymentMethod }
+export type { BalanceStatus, CurrencyPrice, PaymentKind, PaymentMethod }
 
 export interface Payment {
   id: number
   pilgrim: number | Pilgrim
+  /** Oda ücreti (borçtan düşülür) veya bağış (borca etki etmez). */
+  kind: PaymentKind
   /** Alınan tutar (kasaya giren). */
   amount: number
   /** Ödemenin para birimi; boşsa oda ücretinin para birimi. */
   currency?: string | null
-  /** Borçtan düşülen tutar (borcun para biriminde). */
+  /** Borçtan düşülen tutar (borcun para biriminde); bağışta boş. */
   debtAmount?: number | null
   debtCurrency?: string | null
   /** Paranın girdiği kasa. */

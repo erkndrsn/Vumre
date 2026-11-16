@@ -12,6 +12,7 @@ import {
 } from '../lib/payments'
 import { CURRENCY_OPTIONS, relationId } from '../lib/rooms'
 import {
+  PAYMENT_KIND_OPTIONS,
   PAYMENT_METHOD_OPTIONS,
   convertFromDebt,
   payableCurrencies,
@@ -31,7 +32,7 @@ export const Payments: CollectionConfig = {
   access: adminOnlyAccess,
   admin: {
     group: 'Muhasebe',
-    defaultColumns: ['pilgrim', 'amount', 'currency', 'cashbox', 'debtAmount', 'paidAt'],
+    defaultColumns: ['pilgrim', 'kind', 'amount', 'currency', 'cashbox', 'debtAmount', 'paidAt'],
   },
   defaultSort: '-paidAt',
   endpoints: [balancesEndpoint, accountsEndpoint],
@@ -46,6 +47,19 @@ export const Payments: CollectionConfig = {
       admin: {
         description:
           'Odası belli değilse tahsilat ön ödeme olarak alınır; odaya atanınca ücretten düşülür.',
+      },
+    },
+    {
+      name: 'kind',
+      label: 'Tür',
+      type: 'select',
+      required: true,
+      defaultValue: 'room',
+      index: true,
+      options: PAYMENT_KIND_OPTIONS,
+      admin: {
+        description:
+          'Bağış, kişinin odasından bağımsız programa yapılan ödemedir; kasaya girer, borçtan düşülmez.',
       },
     },
     {
@@ -152,6 +166,9 @@ export const Payments: CollectionConfig = {
         const amount = roundMoney(Number(data.amount ?? originalDoc?.amount))
         if (!(amount > 0)) throw paymentError('amount', 'Tutar sıfırdan büyük olmalıdır.')
 
+        const kind = data.kind ?? originalDoc?.kind ?? 'room'
+        data.kind = kind
+
         // Borç, kişi bir ödeme grubundaysa grubun toplamıdır. Düzenlenen ödemenin eski
         // tutarı sayılmaz. Odası belli değilse (grupta kimse odada değilse) borç yoktur;
         // ödeme ön ödeme olarak alınır ve odaya atanınca ücretten düşülür.
@@ -206,6 +223,15 @@ export const Payments: CollectionConfig = {
         data.currency = currency
         data.cashbox = cashbox.id
         data.method = cashbox.kind ?? 'cash'
+        if (operation === 'create' && req.user) data.receivedBy = req.user.id
+
+        // Bağış odadan bağımsızdır: borca, ön ödemeye ve para birimi kurallarına karışmaz;
+        // kasanın para biriminde alınır.
+        if (kind === 'donation') {
+          data.debtAmount = null
+          data.debtCurrency = null
+          return data
+        }
 
         if (!debt) {
           const owner = group ? `${group.name} grubu` : (pilgrim.fullName ?? '')
@@ -219,7 +245,6 @@ export const Payments: CollectionConfig = {
           }
           data.debtCurrency = currency
           data.debtAmount = amount
-          if (operation === 'create' && req.user) data.receivedBy = req.user.id
           return data
         }
 
@@ -255,13 +280,14 @@ export const Payments: CollectionConfig = {
         if (!(data.debtAmount > 0)) {
           throw paymentError('amount', 'Tutar, borç para biriminde kuruştan az; geçerli değil.')
         }
-        if (operation === 'create' && req.user) data.receivedBy = req.user.id
         return data
       },
     ],
     afterChange: [
       // Ödeme yapan (kısmen de olsa) kişinin fiyatı sabitlenir; sonraki zamlar ona yansımaz.
+      // Bağış oda ücreti sayılmaz, fiyatı sabitlemez.
       async ({ doc, req }) => {
+        if (doc.kind === 'donation') return doc
         const pilgrimId = relationId(doc.pilgrim)
         if (pilgrimId) await lockPrices(req, pilgrimId)
         return doc

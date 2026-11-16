@@ -407,6 +407,10 @@ export interface Payment {
    * Odası belli değilse tahsilat ön ödeme olarak alınır; odaya atanınca ücretten düşülür.
    */
   pilgrim: number | Pilgrim;
+  /**
+   * Bağış, kişinin odasından bağımsız programa yapılan ödemedir; kasaya girer, borçtan düşülmez.
+   */
+  kind: 'room' | 'donation';
   amount: number;
   /**
    * Boş bırakılırsa kasanın para birimi. Oda tipinde fiyatı girilmiş diğer para birimleriyle de ödeme alınabilir.
@@ -909,6 +913,7 @@ export interface CashboxesSelect<T extends boolean = true> {
  */
 export interface PaymentsSelect<T extends boolean = true> {
   pilgrim?: T;
+  kind?: T;
   amount?: T;
   currency?: T;
   cashbox?: T;

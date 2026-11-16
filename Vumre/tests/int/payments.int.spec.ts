@@ -57,11 +57,17 @@ async function createPilgrim(firstName: string, room?: number, birthDate?: strin
   return doc
 }
 
-async function pay(pilgrim: number, amount: number, currency?: Currency) {
+async function pay(
+  pilgrim: number,
+  amount: number,
+  currency?: Currency,
+  kind: 'room' | 'donation' = 'room',
+) {
   const doc = await payload.create({
     collection: 'payments',
     data: {
       pilgrim,
+      kind,
       amount,
       currency,
       cashbox: await cashboxes.of(currency),
@@ -318,6 +324,7 @@ describe('Tahsilat ve borç takibi', () => {
     // Ödeme şekli kasanın türüyle değiştirilir.
     const data = {
       pilgrim: p.id,
+      kind: 'room' as const,
       amount: 100,
       paidAt: new Date().toISOString(),
       method: 'card' as const,
@@ -366,6 +373,70 @@ describe('Tahsilat ve borç takibi', () => {
     })
     const synced = await payload.findByID({ collection: 'pilgrims', id: child.id, depth: 0 })
     expect(synced.roomOtherPrices?.[0]).toMatchObject({ currency: 'EUR', price: 540 })
+  })
+
+  it('bağışı borçtan düşmez; borç kapanmış olsa da alır', async () => {
+    const room = await createRoom(1000)
+    const p = await createPilgrim('Bağışçı', room.id)
+    await pay(p.id, 400)
+
+    // Kalan borçtan fazla da olsa bağış alınır; borca yazılmaz.
+    const donation = await pay(p.id, 2500, undefined, 'donation')
+    expect(donation).toMatchObject({ kind: 'donation', currency: 'USD', amount: 2500 })
+    expect(donation.debtAmount ?? null).toBeNull()
+    expect(donation.debtCurrency ?? null).toBeNull()
+    expect(await balanceOf(p.id)).toMatchObject({
+      paid: 400,
+      balance: 600,
+      status: 'partial',
+      paymentCount: 1,
+    })
+
+    await pay(p.id, 600)
+    expect((await balanceOf(p.id)).status).toBe('paid')
+    await pay(p.id, 100, undefined, 'donation')
+    expect(await balanceOf(p.id)).toMatchObject({ paid: 1000, balance: 0, status: 'paid' })
+
+    // Bağış oda ücretine çevrilirken borç sınırı uygulanır.
+    expect(
+      await fieldError(
+        payload.update({ collection: 'payments', id: donation.id, data: { kind: 'room' }, req }),
+      ),
+    ).toMatch(/kalan borç yok/)
+  })
+
+  it('bağış oda tipinde fiyatı olmayan para biriminde alınır, para birimi kurallarına karışmaz', async () => {
+    // Odası yokken alınan TRY bağış ön ödeme sayılmaz, ön ödemenin dövizini belirlemez.
+    const p = await createPilgrim('Döviz Bağışçı')
+    await pay(p.id, 5000, 'TRY', 'donation')
+    expect((await balanceOf(p.id)).status).toBe('unpriced')
+    await pay(p.id, 200, 'USD')
+    expect(await balanceOf(p.id)).toMatchObject({ paid: 200, currency: 'USD', status: 'advance' })
+
+    // USD odaya atanırken bağış çevrilmez, atamayı da engellemez.
+    const room = await createRoom(1000)
+    await payload.update({ collection: 'pilgrims', id: p.id, data: { room: room.id } })
+    expect(await balanceOf(p.id)).toMatchObject({ price: 1000, paid: 200, balance: 800 })
+    const { docs } = await payload.find({
+      collection: 'payments',
+      where: { pilgrim: { equals: p.id }, kind: { equals: 'donation' } },
+      depth: 0,
+    })
+    expect(docs).toHaveLength(1)
+    expect(docs[0]).toMatchObject({ amount: 5000, currency: 'TRY' })
+    expect(docs[0]!.debtCurrency ?? null).toBeNull()
+  })
+
+  it('bağış fiyatı sabitlemez; arşivdeki kişiyi iade listesine sokmaz', async () => {
+    const room = await createRoom(1000)
+    const p = await createPilgrim('Sabitsiz', room.id)
+    await pay(p.id, 300, undefined, 'donation')
+    const fresh = await payload.findByID({ collection: 'pilgrims', id: p.id, depth: 0 })
+    expect(fresh.priceLocked ?? false).toBe(false)
+
+    await payload.update({ collection: 'pilgrims', id: p.id, data: { archived: true } })
+    const all = await getBalances(req)
+    expect(all.some((b) => b.id === p.id)).toBe(false)
   })
 
   it('ana para birimini diğer para birimlerinde tekrar etmeye izin vermez', async () => {

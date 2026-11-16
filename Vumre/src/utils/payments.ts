@@ -14,6 +14,21 @@ export const PAYMENT_METHOD_LABELS = Object.fromEntries(
 ) as Record<PaymentMethod, string>
 
 /**
+ * - `room`: oda ücreti; borçtan düşülür (oda belli değilse ön ödeme)
+ * - `donation`: programa bağış; kasaya girer, borca etki etmez
+ */
+export type PaymentKind = 'room' | 'donation'
+
+export const PAYMENT_KIND_OPTIONS: { label: string; value: PaymentKind }[] = [
+  { label: 'Oda ücreti', value: 'room' },
+  { label: 'Bağış', value: 'donation' },
+]
+
+export const PAYMENT_KIND_LABELS = Object.fromEntries(
+  PAYMENT_KIND_OPTIONS.map((o) => [o.value, o.label]),
+) as Record<PaymentKind, string>
+
+/**
  * - `unpriced`: odaya atanmamış, borcu yok ve ödemesi de yok
  * - `unpaid`: borcu var, hiç ödeme yapmamış
  * - `partial`: borcunun bir kısmını ödemiş

@@ -40,6 +40,12 @@ export interface PilgrimBalance {
 }
 
 /**
+ * Borca sayılan (oda ücreti) tahsilatlar. Bağışlar kasaya girer ama borçtan düşülmez,
+ * ön ödeme ve para birimi kurallarına da karışmaz.
+ */
+export const DEBT_PAYMENTS: Where = { kind: { not_equals: 'donation' } }
+
+/**
  * Ödemenin borçtan düşülen tutarı ve para birimi. Bu alanlardan önce kaydedilmiş ödemelerde
  * ödeme zaten borcun para birimindeydi.
  */
@@ -59,7 +65,7 @@ export function debtPart(p: {
 export async function backfillPaymentDebt(payload: Payload) {
   const { docs } = await payload.find({
     collection: 'payments',
-    where: { debtAmount: { exists: false } },
+    where: { and: [{ debtAmount: { exists: false } }, DEBT_PAYMENTS] },
     select: { amount: true, currency: true },
     pagination: false,
     depth: 0,
@@ -73,11 +79,12 @@ export async function backfillPaymentDebt(payload: Payload) {
   }
 }
 
-/** Umrecinin ödemelerinin borçtan düşülen toplamı. `excludePaymentId` güncellenen ödemenin kendisini saymamak içindir. */
+/** Umrecinin (bağış dışı) ödemelerinin borçtan düşülen toplamı. `excludePaymentId` güncellenen ödemenin kendisini saymamak içindir. */
 export async function paidTotal(req: PayloadRequest, pilgrimId: Id, excludePaymentId?: Id) {
   const { docs } = await req.payload.find({
     collection: 'payments',
     where: {
+      ...DEBT_PAYMENTS,
       pilgrim: { equals: pilgrimId },
       ...(excludePaymentId !== undefined ? { id: { not_equals: excludePaymentId } } : {}),
     },
@@ -102,6 +109,7 @@ export async function advanceCurrency(
   const { docs } = await req.payload.find({
     collection: 'payments',
     where: {
+      ...DEBT_PAYMENTS,
       pilgrim: { in: pilgrimIds },
       ...(excludePaymentId !== undefined ? { id: { not_equals: excludePaymentId } } : {}),
     },
@@ -131,6 +139,7 @@ export async function convertAdvancePayments(
   const { docs } = await req.payload.find({
     collection: 'payments',
     where: {
+      ...DEBT_PAYMENTS,
       pilgrim: { in: pilgrimIds },
       debtCurrency: { not_equals: roomType.currency },
     },
@@ -201,7 +210,11 @@ export async function hasPaymentsInOtherCurrency(
 ) {
   const { totalDocs } = await req.payload.count({
     collection: 'payments',
-    where: { pilgrim: { equals: pilgrimId }, debtCurrency: { not_equals: currency } },
+    where: {
+      ...DEBT_PAYMENTS,
+      pilgrim: { equals: pilgrimId },
+      debtCurrency: { not_equals: currency },
+    },
     req,
   })
   return totalDocs > 0
@@ -214,8 +227,8 @@ export async function hasPaymentsInOtherCurrency(
 export async function getBalances(req: PayloadRequest, pilgrimId?: Id): Promise<PilgrimBalance[]> {
   const pilgrimWhere: Where | undefined =
     pilgrimId !== undefined ? { id: { equals: pilgrimId } } : undefined
-  const paymentWhere: Where | undefined =
-    pilgrimId !== undefined ? { pilgrim: { equals: pilgrimId } } : undefined
+  const paymentWhere: Where =
+    pilgrimId !== undefined ? { ...DEBT_PAYMENTS, pilgrim: { equals: pilgrimId } } : DEBT_PAYMENTS
 
   const [pilgrims, payments, regions, rooms, groups] = await Promise.all([
     req.payload.find({

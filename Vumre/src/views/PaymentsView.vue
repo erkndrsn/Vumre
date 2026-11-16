@@ -24,14 +24,18 @@ import { CASHBOX_KIND_LABELS } from '@/utils/cash'
 import {
   BALANCE_STATUS_BADGE,
   BALANCE_STATUS_LABELS,
+  PAYMENT_KIND_LABELS,
   PAYMENT_METHOD_LABELS,
   convertFromDebt,
   payableCurrencies,
+  roundMoney,
   todayInputValue,
+  type PaymentKind,
 } from '@/utils/payments'
 
 interface FormState {
   payer: number | null
+  kind: PaymentKind
   currency: string
   amount: number | null
   paidAt: string
@@ -104,15 +108,27 @@ function defaultAdvanceCurrency() {
   return cashboxes.value.find((c) => c.active !== false)?.currency ?? CURRENCIES[0] ?? 'USD'
 }
 
-const emptyForm = (account?: AccountBalance | null): FormState => ({
-  payer: account?.contact ? Number(account.contact.pilgrimId) : null,
-  currency: account?.currency ?? (account ? defaultAdvanceCurrency() : ''),
-  amount: account && account.balance > 0 ? account.balance : null,
-  paidAt: todayInputValue(),
-  cashbox: pickCashbox(account?.currency),
-  receiptNo: '',
-  note: '',
-})
+/** Oda ücreti alınabilir mi: odası belli değilse ön ödeme, belliyse kalan borç varsa. */
+function collectable(account: AccountBalance | null | undefined) {
+  if (!account) return false
+  return account.price == null || (!!account.price && account.balance > 0)
+}
+
+/** Borcu kapanmış hesapta form bağışla açılır. */
+const emptyForm = (account?: AccountBalance | null): FormState => {
+  const kind: PaymentKind = !account || collectable(account) ? 'room' : 'donation'
+  const currency = account?.currency ?? (account ? defaultAdvanceCurrency() : '')
+  return {
+    payer: account?.contact ? Number(account.contact.pilgrimId) : null,
+    kind,
+    currency,
+    amount: kind === 'room' && account && account.balance > 0 ? account.balance : null,
+    paidAt: todayInputValue(),
+    cashbox: pickCashbox(currency),
+    receiptNo: '',
+    note: '',
+  }
+}
 const form = reactive<FormState>(emptyForm())
 
 const routeGroup = computed(() => Number(route.query.group) || null)
@@ -154,9 +170,13 @@ const suggestions = computed<Suggestion[]>(() => {
 /** Odası (grupta kimsenin odası) belli değil: tahsilat ön ödeme olarak alınır. */
 const isAdvance = computed(() => !!selected.value && selected.value.price == null)
 
-const canCollect = computed(
-  () => isAdvance.value || (!!selected.value?.price && selected.value.balance > 0),
-)
+const canCollect = computed(() => collectable(selected.value))
+
+/** Bağış odadan bağımsızdır; borçtan düşülmez, aktif kasası olan her para biriminde alınır. */
+const isDonation = computed(() => form.kind === 'donation')
+
+/** Düzenlenen oda ücreti tahsilatı, borç kapanmış olsa da oda ücreti olarak kalabilir. */
+const roomKindAllowed = computed(() => canCollect.value || editing.value?.kind === 'room')
 
 /** Ödeme alınabilecek para birimleri; ilki borcun para birimi. */
 const payable = computed(() => (selected.value ? payableCurrencies(selected.value) : []))
@@ -166,6 +186,9 @@ const payable = computed(() => (selected.value ? payableCurrencies(selected.valu
  * borçta oda tipinde fiyatı girilmiş olanlar.
  */
 const currencyOptions = computed<string[]>(() => {
+  if (isDonation.value) {
+    return [...new Set(cashboxes.value.filter((c) => c.active !== false).map((c) => c.currency))]
+  }
   if (!isAdvance.value) return payable.value.map((c) => c.currency)
   return selected.value?.currency ? [selected.value.currency] : [...CURRENCIES]
 })
@@ -184,7 +207,8 @@ function remainingIn(currency: string, includeEdited = true) {
   return convertFromDebt(balance, account, currency)
 }
 
-const formRemaining = computed(() => remainingIn(form.currency))
+/** Formdaki para biriminde kalan borç; bağış borçtan düşülmediği için sınırı yoktur. */
+const formRemaining = computed(() => (isDonation.value ? null : remainingIn(form.currency)))
 
 /**
  * Formda seçilebilecek aktif kasalar: tahsilat alınabilecek tüm para birimlerindeki kasalar.
@@ -217,6 +241,18 @@ function debtNote(p: Payment) {
 }
 
 const memberIds = computed(() => selected.value?.members.map((m) => m.id) ?? [])
+
+/** Hesabın bağışları, para birimine göre ("100 USD · 500 TRY"). */
+const donationTotal = computed(() => {
+  const totals = new Map<string, number>()
+  for (const p of history.value) {
+    if (p.kind !== 'donation' || !p.currency) continue
+    totals.set(p.currency, roundMoney((totals.get(p.currency) ?? 0) + p.amount))
+  }
+  return [...totals].map(([currency, amount]) => formatMoney(amount, currency)).join(' · ')
+})
+
+const isDonationPayment = (p: Payment) => p.kind === 'donation'
 
 function pilgrimName(p: Payment) {
   return typeof p.pilgrim === 'object' ? (p.pilgrim as Pilgrim).fullName : null
@@ -321,6 +357,7 @@ function startEdit(p: Payment) {
   setReceiptFiles([])
   Object.assign(form, {
     payer: pilgrimIdOf(p),
+    kind: p.kind ?? 'room',
     currency: p.currency ?? '',
     amount: p.amount,
     paidAt: todayInputValue(new Date(p.paidAt)),
@@ -346,8 +383,10 @@ async function save() {
   error.value = ''
   success.value = ''
   try {
+    const donation = isDonation.value
     const data = {
       pilgrim: form.payer,
+      kind: form.kind,
       amount: form.amount,
       currency: form.currency || null,
       cashbox: form.cashbox,
@@ -359,9 +398,13 @@ async function save() {
     const payment = edited ? await updatePayment(edited.id, data) : await createPayment(data)
     rememberCashbox(currency, form.cashbox)
     const box = cashboxes.value.find((c) => c.id === form.cashbox)
+    const where = box ? ` (${box.name})` : ''
+    const payerName = current.members.find((m) => m.id === form.payer)?.fullName ?? current.name
     success.value = edited
-      ? `${formatDate(edited.paidAt)} tarihli tahsilat güncellendi: ${formatMoney(form.amount, currency)}${box ? ` (${box.name})` : ''}.`
-      : `${current.name} için ${formatMoney(form.amount, currency)} tahsil edildi${box ? ` (${box.name})` : ''}.`
+      ? `${formatDate(edited.paidAt)} tarihli ${donation ? 'bağış' : 'tahsilat'} güncellendi: ${formatMoney(form.amount, currency)}${where}.`
+      : donation
+        ? `${payerName} adına ${formatMoney(form.amount, currency)} bağış alındı${where}.`
+        : `${current.name} için ${formatMoney(form.amount, currency)} tahsil edildi${where}.`
     editing.value = null
     // Tahsilat kaydedildi; dekont yüklenemezse ödeme geçmişinden yeniden eklenebilir.
     try {
@@ -383,7 +426,7 @@ async function save() {
 }
 
 async function destroy(payment: Payment) {
-  const text = `${formatDate(payment.paidAt)} tarihli ${formatMoney(payment.amount, payment.currency)} tahsilat silinsin mi?`
+  const text = `${formatDate(payment.paidAt)} tarihli ${formatMoney(payment.amount, payment.currency)} ${isDonationPayment(payment) ? 'bağış' : 'tahsilat'} silinsin mi?`
   if (!confirm(text)) return
   error.value = ''
   success.value = ''
@@ -408,8 +451,8 @@ async function destroy(payment: Payment) {
 watch(
   () => form.currency,
   () => {
-    // Düzenlenen tahsilatın tutarı kendiliğinden değiştirilmez.
-    if (!editing.value) form.amount = formRemaining.value
+    // Düzenlenen tahsilatın ve bağışın tutarı kendiliğinden değiştirilmez.
+    if (!editing.value && !isDonation.value) form.amount = formRemaining.value
     const currency = form.currency || selected.value?.currency
     const box = cashboxes.value.find((c) => c.id === form.cashbox)
     if (box?.currency !== currency) form.cashbox = pickCashbox(currency)
@@ -424,6 +467,18 @@ watch(
     if (box && box.currency !== (form.currency || selected.value?.currency)) {
       form.currency = box.currency
     }
+  },
+)
+
+// Tür değişince para birimi yeni türde alınabilecek biri olur; yeni tahsilatta tutar oda
+// ücretinde kalan borç, bağışta boş olur.
+watch(
+  () => form.kind,
+  () => {
+    if (!currencyOptions.value.includes(form.currency)) {
+      form.currency = currencyOptions.value[0] ?? form.currency
+    }
+    if (!editing.value) form.amount = formRemaining.value
   },
 )
 
@@ -558,6 +613,10 @@ onMounted(async () => {
               </small>
             </dd>
           </div>
+          <div v-if="donationTotal">
+            <dt>Bağış <small class="muted">(borçtan düşülmez)</small></dt>
+            <dd>{{ donationTotal }}</dd>
+          </div>
         </dl>
 
         <div v-if="isGroup" class="table-wrap members">
@@ -589,25 +648,36 @@ onMounted(async () => {
         </div>
       </div>
 
-      <form
-        v-if="canCollect || editing"
-        ref="formEl"
-        class="card form"
-        :class="{ editing }"
-        @submit.prevent="save"
-      >
+      <p v-if="!canCollect && !editing" class="card muted notice">
+        <template v-if="selected.balance < 0">
+          Ödenen tutar oda ücretini aşıyor; fazla ödeme iade edilmeli veya tahsilat düzeltilmeli.
+        </template>
+        <template v-else>Borç kapanmış, alınacak oda ücreti yok.</template>
+        Programa bağış aşağıdan alınabilir.
+      </p>
+
+      <form ref="formEl" class="card form" :class="{ editing }" @submit.prevent="save">
         <h2>
           <template v-if="editing">
-            Tahsilatı düzenle
+            {{ editing.kind === 'donation' ? 'Bağışı düzenle' : 'Tahsilatı düzenle' }}
             <small class="muted">
               {{ formatDate(editing.paidAt) }} · {{ formatMoney(editing.amount, editing.currency) }}
             </small>
           </template>
-          <template v-else>Tahsilat al</template>
+          <template v-else>{{ isDonation ? 'Bağış al' : 'Tahsilat al' }}</template>
         </h2>
         <div class="form-grid">
+          <label class="field">
+            <span>Tür</span>
+            <select v-model="form.kind">
+              <option value="room" :disabled="!roomKindAllowed">
+                {{ PAYMENT_KIND_LABELS.room }}
+              </option>
+              <option value="donation">{{ PAYMENT_KIND_LABELS.donation }}</option>
+            </select>
+          </label>
           <label v-if="isGroup" class="field">
-            <span>Ödeyen</span>
+            <span>{{ isDonation ? 'Bağış yapan' : 'Ödeyen' }}</span>
             <select v-model.number="form.payer" required>
               <option v-for="m in selected.members" :key="m.id" :value="m.id">
                 {{ m.fullName }}
@@ -688,21 +758,25 @@ onMounted(async () => {
             <textarea v-model="form.note" rows="2" />
           </label>
         </div>
+        <p v-if="isDonation" class="muted small">
+          Bağış kişinin odasından bağımsız, programa yapılan ödemedir; kasaya girer ama
+          <strong>borçtan düşülmez</strong>.
+        </p>
         <p
-          v-if="!isAdvance && form.currency && form.currency !== selected.currency"
+          v-else-if="!isAdvance && form.currency && form.currency !== selected.currency"
           class="muted small"
         >
           Kalan borç {{ formatMoney(formRemaining, form.currency) }}. {{ form.currency }} ödeme, oda
           ücretlerinin oranıyla {{ selected.currency }} borçtan düşülür.
         </p>
-        <p v-if="isAdvance" class="muted small">
+        <p v-if="isAdvance && !isDonation" class="muted small">
           {{ isGroup ? 'Grupta odaya atanmış kimse' : 'Umrecinin odası' }} henüz belli olmadığı için
           tahsilat <strong>ön ödeme</strong> olarak alınır; odaya atanınca oda ücretinden düşülür.
           <template v-if="selected.currency">
             Önceki ön ödemeler {{ selected.currency }} olduğundan aynı para biriminde alınır.
           </template>
         </p>
-        <p v-if="isGroup && !isAdvance" class="muted small">
+        <p v-if="isGroup && !isAdvance && !isDonation" class="muted small">
           Ödeme grubun toplam borcundan düşer; kişilere ayrıca dağıtılmaz.
         </p>
         <p v-if="!formCashboxes.length" class="small warn">
@@ -711,7 +785,7 @@ onMounted(async () => {
               ', ',
             )
           }}
-          cinsinden aktif kasa yok; tahsilat için önce
+          cinsinden aktif kasa yok; {{ isDonation ? 'bağış' : 'tahsilat' }} için önce
           <RouterLink to="/kasa">Kasa</RouterLink> sayfasından kasa açın.
         </p>
         <div class="form-actions">
@@ -725,7 +799,7 @@ onMounted(async () => {
             Vazgeç
           </button>
           <button
-            v-if="!isAdvance && formRemaining"
+            v-if="!isDonation && !isAdvance && formRemaining"
             type="button"
             class="btn btn-secondary"
             :disabled="saving"
@@ -738,16 +812,18 @@ onMounted(async () => {
             class="btn btn-primary"
             :disabled="saving || !form.amount || !form.payer || !form.cashbox"
           >
-            {{ saving ? 'Kaydediliyor…' : editing ? 'Değişiklikleri kaydet' : 'Tahsilatı kaydet' }}
+            {{
+              saving
+                ? 'Kaydediliyor…'
+                : editing
+                  ? 'Değişiklikleri kaydet'
+                  : isDonation
+                    ? 'Bağışı kaydet'
+                    : 'Tahsilatı kaydet'
+            }}
           </button>
         </div>
       </form>
-      <p v-else class="card muted notice">
-        <template v-if="selected.balance < 0">
-          Ödenen tutar oda ücretini aşıyor; fazla ödeme iade edilmeli veya tahsilat düzeltilmeli.
-        </template>
-        <template v-else>Borç kapanmış, alınacak tahsilat yok.</template>
-      </p>
 
       <div class="card table-wrap">
         <h2>Ödeme geçmişi</h2>
@@ -773,7 +849,10 @@ onMounted(async () => {
               <td v-if="isGroup">{{ pilgrimName(p) || '—' }}</td>
               <td class="num">
                 {{ formatMoney(p.amount, p.currency) }}
-                <small v-if="debtNote(p)" class="alt muted">{{ debtNote(p) }}</small>
+                <small v-if="isDonationPayment(p)" class="alt">
+                  <span class="badge badge-donation">Bağış</span>
+                </small>
+                <small v-else-if="debtNote(p)" class="alt muted">{{ debtNote(p) }}</small>
               </td>
               <td>{{ cashboxOf(p) }}</td>
               <td>{{ p.receiptNo || '—' }}</td>
@@ -805,7 +884,9 @@ onMounted(async () => {
 
     <div v-else class="card table-wrap">
       <h2>Son tahsilatlar</h2>
-      <p class="muted hint">Tahsilat almak için yukarıdan umreci veya ödeme grubu arayın.</p>
+      <p class="muted hint">
+        Tahsilat veya bağış almak için yukarıdan umreci veya ödeme grubu arayın.
+      </p>
       <p v-if="!recent.length" class="empty-state">Henüz tahsilat yok.</p>
       <table v-else class="table">
         <thead>
@@ -826,7 +907,10 @@ onMounted(async () => {
             <td>{{ pilgrimName(p) || '—' }}</td>
             <td class="num">
               {{ formatMoney(p.amount, p.currency) }}
-              <small v-if="debtNote(p)" class="alt muted">{{ debtNote(p) }}</small>
+              <small v-if="isDonationPayment(p)" class="alt">
+                <span class="badge badge-donation">Bağış</span>
+              </small>
+              <small v-else-if="debtNote(p)" class="alt muted">{{ debtNote(p) }}</small>
             </td>
             <td>{{ cashboxOf(p) }}</td>
             <td>{{ p.receiptNo || '—' }}</td>
@@ -1011,5 +1095,9 @@ h2 small {
 .hint {
   margin: -0.5rem 0 0.75rem;
   font-size: 0.875rem;
+}
+
+.badge-donation {
+  color: var(--color-primary);
 }
 </style>

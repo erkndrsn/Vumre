@@ -1,6 +1,7 @@
 import { APIError, ValidationError, type CollectionConfig, type PayloadRequest } from 'payload'
 
 import { adminOnlyAccess } from '../lib/access'
+import { DEBT_PAYMENTS } from '../lib/payments'
 import { CURRENCY_OPTIONS, countOccupants, relationId } from '../lib/rooms'
 import {
   ageOn,
@@ -179,7 +180,11 @@ export const RoomTypes: CollectionConfig = {
 
         const { totalDocs } = await req.payload.count({
           collection: 'payments',
-          where: { pilgrim: { in: ids }, debtCurrency: { not_equals: data.currency } },
+          where: {
+            ...DEBT_PAYMENTS,
+            pilgrim: { in: ids },
+            debtCurrency: { not_equals: data.currency },
+          },
           req,
         })
         if (totalDocs > 0) {

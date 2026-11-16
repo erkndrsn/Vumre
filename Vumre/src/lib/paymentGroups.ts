@@ -9,7 +9,7 @@ import {
 } from 'payload'
 
 import { roundMoney, sumOtherPrices } from '../utils/payments'
-import { debtPart } from './payments'
+import { DEBT_PAYMENTS, debtPart } from './payments'
 import { relationId } from './rooms'
 import { requireAdmin } from './access'
 
@@ -41,12 +41,12 @@ export async function groupMembers(req: PayloadRequest, groupId: Id, excludePilg
   return docs
 }
 
-/** Kişilerin ödemelerinin borca yazıldığı para birimleri. */
+/** Kişilerin (bağış dışı) ödemelerinin borca yazıldığı para birimleri. */
 async function paymentCurrencies(req: PayloadRequest, pilgrimIds: Id[]) {
   if (!pilgrimIds.length) return new Set<string>()
   const { docs } = await req.payload.find({
     collection: 'payments',
-    where: { pilgrim: { in: pilgrimIds } },
+    where: { ...DEBT_PAYMENTS, pilgrim: { in: pilgrimIds } },
     select: { currency: true, debtCurrency: true },
     pagination: false,
     depth: 0,
@@ -94,6 +94,7 @@ export async function groupDebt(req: PayloadRequest, groupId: Id, excludePayment
     ? await req.payload.find({
         collection: 'payments',
         where: {
+          ...DEBT_PAYMENTS,
           pilgrim: { in: ids },
           ...(excludePaymentId !== undefined ? { id: { not_equals: excludePaymentId } } : {}),
         },

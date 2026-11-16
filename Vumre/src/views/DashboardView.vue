@@ -339,7 +339,9 @@ onMounted(load)
             <tr v-for="p in recent" :key="p.id">
               <td>
                 {{ pilgrimName(p) }}
-                <small class="muted block">{{ cashboxName(p) }}</small>
+                <small class="muted block">
+                  {{ cashboxName(p) }}<template v-if="p.kind === 'donation'"> · Bağış</template>
+                </small>
               </td>
               <td class="nowrap">{{ formatDate(p.paidAt) }}</td>
               <td class="num">{{ formatMoney(p.amount, p.currency) }}</td>

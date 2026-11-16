@@ -67,6 +67,7 @@ async function pay(pilgrim: number, amount: number, currency?: 'USD' | 'EUR') {
     collection: 'payments',
     data: {
       pilgrim,
+      kind: 'room' as const,
       amount,
       currency,
       cashbox: await cashboxes.of(currency),

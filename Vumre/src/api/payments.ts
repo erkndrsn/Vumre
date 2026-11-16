@@ -34,7 +34,7 @@ export async function listPayments(pilgrims?: number | number[], limit = 0) {
 
 export function createPayment(
   data: Pick<Payment, 'pilgrim' | 'amount' | 'paidAt'> & { cashbox: number } & Partial<
-      Pick<Payment, 'currency' | 'receiptNo' | 'note'>
+      Pick<Payment, 'kind' | 'currency' | 'receiptNo' | 'note'>
     >,
 ) {
   return create<Payment>('payments', data)
@@ -43,7 +43,7 @@ export function createPayment(
 export function updatePayment(
   id: number,
   data: Partial<
-    Pick<Payment, 'pilgrim' | 'amount' | 'paidAt' | 'currency' | 'receiptNo' | 'note'>
+    Pick<Payment, 'pilgrim' | 'kind' | 'amount' | 'paidAt' | 'currency' | 'receiptNo' | 'note'>
   > & {
     cashbox?: number
   },

@@ -30,6 +30,7 @@ async function pay(amount: number) {
     collection: 'payments',
     data: {
       pilgrim: pilgrimId,
+      kind: 'room' as const,
       amount,
       cashbox: await cashboxes.of('USD'),
       paidAt: new Date().toISOString(),

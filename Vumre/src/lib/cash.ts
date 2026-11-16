@@ -56,7 +56,14 @@ export async function getCashboxLedger(
     req.payload.find({
       collection: 'payments',
       where: { cashbox: { equals: cashboxId } },
-      select: { pilgrim: true, amount: true, paidAt: true, receiptNo: true, createdAt: true },
+      select: {
+        pilgrim: true,
+        kind: true,
+        amount: true,
+        paidAt: true,
+        receiptNo: true,
+        createdAt: true,
+      },
       populate: { pilgrims: { fullName: true } },
       ...common,
     }),
@@ -96,6 +103,7 @@ export async function getCashboxLedger(
       date: p.paidAt,
       createdAt: p.createdAt,
       description:
+        (p.kind === 'donation' ? 'Bağış — ' : '') +
         (typeof p.pilgrim === 'object' && p.pilgrim ? (p.pilgrim.fullName ?? '') : '') +
         (p.receiptNo ? ` (makbuz ${p.receiptNo})` : ''),
       amount: p.amount,
