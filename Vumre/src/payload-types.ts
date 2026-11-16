@@ -360,6 +360,10 @@ export interface Pilgrim {
       }[]
     | null;
   /**
+   * İşaretliyse oda tipinin fiyatı değişince bu kişinin ücreti değişmez. İlk tahsilatta (ödeme grubundaysa grubun tamamı için) kendiliğinden işaretlenir.
+   */
+  priceLocked?: boolean | null;
+  /**
    * Arşive taşınan kişi odasından çıkarılır; oda yerleşiminde, panoda ve listelerde görünmez.
    */
   archived?: boolean | null;
@@ -832,6 +836,7 @@ export interface PilgrimsSelect<T extends boolean = true> {
         price?: T;
         id?: T;
       };
+  priceLocked?: T;
   archived?: T;
   archivedAt?: T;
   archiveReason?: T;

@@ -37,6 +37,7 @@ async function assignedPilgrims(req: PayloadRequest, roomTypeId: Id) {
       roomCurrency: true,
       roomOtherPrices: true,
       paymentGroup: true,
+      priceLocked: true,
     },
     pagination: false,
     depth: 0,
@@ -224,13 +225,16 @@ export const RoomTypes: CollectionConfig = {
       },
       // Umrecinin oda ücreti atamada oda tipinden yazılır; oda tipi her kaydedildiğinde
       // odalardaki umrecilerin ücreti ve para birimleri tipe eşitlenir. Değişiklik aranmaz ki
-      // bir şekilde geride kalmış ücretler de tekrar kaydetmekle düzelsin.
+      // bir şekilde geride kalmış ücretler de tekrar kaydetmekle düzelsin. Fiyatı sabit
+      // (ödeme yapmış) kişiler atlanır; para birimi değiştiyse eski ücret anlamını yitirdiği
+      // için onlar da eşitlenir.
       async ({ doc, operation, req }) => {
         if (operation !== 'update') return doc
         const pilgrims = await assignedPilgrims(req, doc.id)
         const key = (prices: CurrencyPrice[] | null | undefined) =>
           JSON.stringify((prices ?? []).map(({ currency, price }) => [currency, price]))
         for (const p of pilgrims) {
+          if (p.priceLocked && p.roomCurrency === doc.currency) continue
           const age = ageOn(p.birthDate)
           const roomPrice = priceForAge(doc, age)
           const roomOtherPrices = otherPricesForAge(doc, age)

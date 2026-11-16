@@ -3,7 +3,13 @@ import { ValidationError, type CollectionConfig } from 'payload'
 import { adminOnlyAccess } from '../lib/access'
 import { loadCashbox } from '../lib/cash'
 import { groupDebt, groupMembers } from '../lib/paymentGroups'
-import { accountsEndpoint, advanceCurrency, balancesEndpoint, paidTotal } from '../lib/payments'
+import {
+  accountsEndpoint,
+  advanceCurrency,
+  balancesEndpoint,
+  lockPrices,
+  paidTotal,
+} from '../lib/payments'
 import { CURRENCY_OPTIONS, relationId } from '../lib/rooms'
 import {
   PAYMENT_METHOD_OPTIONS,
@@ -251,6 +257,14 @@ export const Payments: CollectionConfig = {
         }
         if (operation === 'create' && req.user) data.receivedBy = req.user.id
         return data
+      },
+    ],
+    afterChange: [
+      // Ödeme yapan (kısmen de olsa) kişinin fiyatı sabitlenir; sonraki zamlar ona yansımaz.
+      async ({ doc, req }) => {
+        const pilgrimId = relationId(doc.pilgrim)
+        if (pilgrimId) await lockPrices(req, pilgrimId)
+        return doc
       },
     ],
     beforeDelete: [

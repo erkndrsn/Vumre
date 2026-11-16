@@ -165,6 +165,34 @@ export async function convertAdvancePayments(
   return null
 }
 
+/**
+ * Ödeme yapan kişinin (ödeme grubundaysa grubun tüm üyelerinin) fiyatını sabitler; oda tipinin
+ * fiyatı sonradan değişse de ücretleri değişmez. Zaten sabit olanlara dokunulmaz.
+ */
+export async function lockPrices(req: PayloadRequest, pilgrimId: Id) {
+  const pilgrim = await req.payload
+    .findByID({
+      collection: 'pilgrims',
+      id: pilgrimId,
+      select: { paymentGroup: true },
+      depth: 0,
+      req,
+    })
+    .catch(() => null)
+  if (!pilgrim) return
+  const groupId = relationId(pilgrim.paymentGroup)
+  await req.payload.update({
+    collection: 'pilgrims',
+    where: {
+      ...(groupId ? { paymentGroup: { equals: groupId } } : { id: { equals: pilgrimId } }),
+      priceLocked: { not_equals: true },
+    },
+    data: { priceLocked: true },
+    depth: 0,
+    req,
+  })
+}
+
 /** Umrecinin borcuna verilen para biriminden farklı yazılmış ödemesi var mı? */
 export async function hasPaymentsInOtherCurrency(
   req: PayloadRequest,

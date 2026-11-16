@@ -230,6 +230,20 @@ export const Pilgrims: CollectionConfig = {
       ],
     },
     {
+      name: 'priceLocked',
+      label: 'Fiyat sabit',
+      type: 'checkbox',
+      access: { create: adminOnlyField, update: adminOnlyField },
+      defaultValue: false,
+      index: true,
+      admin: {
+        position: 'sidebar',
+        description:
+          'İşaretliyse oda tipinin fiyatı değişince bu kişinin ücreti değişmez. İlk tahsilatta ' +
+          '(ödeme grubundaysa grubun tamamı için) kendiliğinden işaretlenir.',
+      },
+    },
+    {
       name: 'archived',
       label: 'Arşivde (programı iptal etti)',
       type: 'checkbox',
@@ -429,6 +443,28 @@ export const Pilgrims: CollectionConfig = {
           throw roomError(
             `Bu umrecinin farklı para biriminde tahsilatı var; ${roomType.currency} ücretli Oda ${room.roomNumber} odasına taşınamaz.`,
           )
+        }
+
+        // Fiyatı sabit kişi aynı oda tipinde başka odaya taşınırsa eski ücreti korunur.
+        // Farklı oda tipine geçişte ya da doğum tarihi düzeltilince güncel fiyat uygulanır.
+        const locked = (data.priceLocked ?? originalDoc?.priceLocked) === true
+        if (
+          locked &&
+          !birthDateChanged &&
+          previousRoomId &&
+          originalDoc?.roomPrice != null &&
+          originalDoc.roomCurrency === roomType.currency
+        ) {
+          const previousRoom = await req.payload
+            .findByID({
+              collection: 'rooms',
+              id: previousRoomId,
+              depth: 0,
+              context: { skipOccupancy: true },
+              req,
+            })
+            .catch(() => null)
+          if (String(relationId(previousRoom?.roomType)) === String(roomType.id)) return data
         }
 
         data.roomPrice = priceForAge(roomType, ageOn(birthDate))

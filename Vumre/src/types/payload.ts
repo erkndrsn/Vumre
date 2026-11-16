@@ -201,6 +201,8 @@ export interface Pilgrim {
   roomCurrency?: string | null
   /** Oda ücretinin diğer para birimlerindeki karşılıkları. */
   roomOtherPrices?: (CurrencyPrice & { id?: string | null })[] | null
+  /** Oda tipinin fiyatı değişince ücreti değişmez; ilk tahsilatta işaretlenir. */
+  priceLocked?: boolean | null
   /** Programı iptal etti; odadan çıkarılır, yerleşimde ve listelerde görünmez. */
   archived?: boolean | null
   archivedAt?: string | null
