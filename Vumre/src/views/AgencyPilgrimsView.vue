@@ -1,12 +1,12 @@
 <script setup lang="ts">
 // Acentenin umreci listesi: yalnızca ad, soyad, doğum tarihi, uçuş noktası, oda ve kimlik resmi.
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { listAgencyPilgrims } from '@/api/agency'
 import type { AgencyPilgrim } from '@/types/payload'
 import { formatDate } from '@/utils/accommodation'
 import { ageOn } from '@/utils/childPricing'
+import IdCardThumb from './IdCardThumb.vue'
 
-type IdCard = NonNullable<AgencyPilgrim['idCard']>
 type RoomFilter = 'all' | 'placed' | 'unplaced'
 type SortKey = 'name' | 'birthDate' | 'flightPoint' | 'room'
 
@@ -21,14 +21,12 @@ const roomFilter = ref<RoomFilter>('all')
 const missingIdOnly = ref(false)
 const sortKey = ref<SortKey>('name')
 const sortDesc = ref(false)
-const preview = ref<{ card: IdCard; name: string } | null>(null)
 
 const num = new Intl.NumberFormat('tr-TR')
 const fold = (s: string) => s.toLocaleLowerCase('tr').trim()
 const fullName = (p: AgencyPilgrim) => `${p.firstName} ${p.lastName}`
 const initials = (p: AgencyPilgrim) =>
   `${p.firstName.charAt(0)}${p.lastName.charAt(0)}`.toLocaleUpperCase('tr')
-const isImage = (card: IdCard) => !!card.mimeType?.startsWith('image/')
 const compareText = (a: string, b: string) =>
   a.localeCompare(b, 'tr', { numeric: true, sensitivity: 'base' })
 
@@ -134,22 +132,7 @@ async function load() {
   }
 }
 
-/** Görseller sayfada büyütülür; PDF'ler yeni sekmede açılır. */
-function open(p: AgencyPilgrim) {
-  if (!p.idCard) return
-  if (isImage(p.idCard)) preview.value = { card: p.idCard, name: fullName(p) }
-  else window.open(p.idCard.url, '_blank', 'noopener')
-}
-
-function onKey(e: KeyboardEvent) {
-  if (e.key === 'Escape') preview.value = null
-}
-
-onMounted(() => {
-  load()
-  window.addEventListener('keydown', onKey)
-})
-onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
+onMounted(load)
 </script>
 
 <template>
@@ -299,22 +282,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
                 <span v-else class="badge badge-warning">Odasız</span>
               </td>
               <td class="id-col">
-                <button
-                  v-if="p.idCard"
-                  type="button"
-                  class="id-thumb"
-                  :aria-label="`${fullName(p)} kimlik resmini aç`"
-                  @click="open(p)"
-                >
-                  <img
-                    v-if="isImage(p.idCard)"
-                    :src="p.idCard.thumbnailUrl || p.idCard.url"
-                    alt=""
-                    loading="lazy"
-                  />
-                  <span v-else class="file-icon">PDF</span>
-                </button>
-                <span v-else class="badge">Yok</span>
+                <IdCardThumb :card="p.idCard" :name="fullName(p)" />
               </td>
             </tr>
           </tbody>
@@ -326,19 +294,6 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
         </template>
         <template v-else>{{ num.format(items.length) }} umreci</template>
       </p>
-    </div>
-
-    <div v-if="preview" class="lightbox" role="dialog" aria-modal="true" @click="preview = null">
-      <img :src="preview.card.url" :alt="`${preview.name} kimlik resmi`" @click.stop />
-      <div class="lightbox-bar" @click.stop>
-        <span>{{ preview.name }}</span>
-        <a :href="preview.card.url" target="_blank" rel="noopener" class="btn btn-secondary btn-sm"
-          >Yeni sekmede aç</a
-        >
-        <button type="button" class="btn btn-secondary btn-sm" @click="preview = null">
-          Kapat
-        </button>
-      </div>
     </div>
   </section>
 </template>
@@ -619,40 +574,6 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   white-space: nowrap;
 }
 
-.id-thumb {
-  display: block;
-  width: 64px;
-  height: 42px;
-  padding: 0;
-  border: 1px solid var(--color-border);
-  border-radius: calc(var(--radius) - 2px);
-  background: var(--color-background);
-  cursor: zoom-in;
-  overflow: hidden;
-  transition: transform 0.12s ease;
-}
-
-.id-thumb:hover {
-  transform: scale(1.05);
-  border-color: var(--color-primary);
-}
-
-.id-thumb img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.file-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: var(--color-muted);
-}
-
 .list-footer {
   margin: 0;
   padding: 0.75rem 1.25rem;
@@ -662,36 +583,6 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 
 .empty-state .btn {
   margin-top: 0.75rem;
-}
-
-/* Kimlik büyütme */
-.lightbox {
-  position: fixed;
-  inset: 0;
-  z-index: 100;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0.75rem;
-  padding: 1rem;
-  background: rgb(0 0 0 / 0.8);
-}
-
-.lightbox img {
-  max-width: 100%;
-  max-height: calc(100vh - 6rem);
-  max-height: calc(100dvh - 6rem);
-  object-fit: contain;
-  border-radius: var(--radius);
-}
-
-.lightbox-bar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem;
-  color: #fff;
 }
 
 @media (max-width: 720px) {

@@ -8,6 +8,8 @@ export interface FindParams {
   sort?: string
   depth?: number
   locale?: string
+  /** Yalnızca istenen alanlar döner (`select[alan]=true`). */
+  select?: Record<string, boolean>
 }
 
 /** İç içe objeleri Payload'un beklediği `where[field][op]=value` formatına çevirir. */

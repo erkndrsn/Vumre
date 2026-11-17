@@ -3,11 +3,15 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { download } from '@/api/client'
 import { find } from '@/api/collections'
-import type { FlightPoint, Pilgrim, Region, Where } from '@/types/payload'
+import { listIdCards } from '@/api/pilgrimDocuments'
+import type { FlightPoint, IdCard, Pilgrim, Region, Where } from '@/types/payload'
 import { flightPointLabel, formatMoney } from '@/utils/accommodation'
 import { ageOn, isChild, isInfant } from '@/utils/childPricing'
+import IdCardThumb from './IdCardThumb.vue'
 
 const items = ref<Pilgrim[]>([])
+// Umreci id → kimlik resmi; kimliği olmayanlar listede "Yok" görünür.
+const idCards = ref(new Map<number, IdCard>())
 const search = ref('')
 const regions = ref<Region[]>([])
 const regionFilter = ref<number | ''>('')
@@ -76,8 +80,12 @@ async function load() {
   }
   const where: Where = { and: conditions }
   try {
-    const res = await find<Pilgrim>('pilgrims', { limit: 0, depth: 1, sort: 'fullName', where })
+    const [res, cards] = await Promise.all([
+      find<Pilgrim>('pilgrims', { limit: 0, depth: 1, sort: 'fullName', where }),
+      listIdCards(),
+    ])
     items.value = res.docs
+    idCards.value = cards
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Umreciler yüklenemedi.'
   } finally {
@@ -175,6 +183,7 @@ onMounted(async () => {
       <table v-else class="table">
         <thead>
           <tr>
+            <th class="id-col">Kimlik</th>
             <th>Ad Soyad</th>
             <th class="num">Yaş</th>
             <th>Bölge</th>
@@ -199,6 +208,12 @@ onMounted(async () => {
             :key="p.id"
             :class="{ infant: isInfant(p.birthDate), child: isChild(p.birthDate) }"
           >
+            <td class="id-col">
+              <IdCardThumb
+                :card="idCards.get(p.id) ?? null"
+                :name="`${p.firstName} ${p.lastName}`"
+              />
+            </td>
             <td>{{ p.firstName }} {{ p.lastName }}</td>
             <td class="num">
               <span v-if="isInfant(p.birthDate)" class="badge badge-infant">Bebek</span>
@@ -251,6 +266,11 @@ onMounted(async () => {
 
 .alert {
   margin-bottom: 1rem;
+}
+
+.id-col {
+  width: 1%;
+  white-space: nowrap;
 }
 
 .summary {

@@ -229,6 +229,13 @@ export interface PilgrimDocument {
   updatedAt: string
 }
 
+/** Listelerde gösterilen kimlik resmi; görsel değilse (PDF) yalnızca bağlantı açılır. */
+export interface IdCard {
+  url: string
+  thumbnailUrl: string | null
+  mimeType: string | null
+}
+
 // Acente umreci listesi (backend: src/lib/agency.ts)
 
 export interface AgencyPilgrim {
@@ -238,7 +245,7 @@ export interface AgencyPilgrim {
   birthDate: string | null
   flightPoint: { id: number; name: string } | null
   roomNumber: string | null
-  idCard: { url: string; thumbnailUrl: string | null; mimeType: string | null } | null
+  idCard: IdCard | null
 }
 
 // Oda yerleşim panosu (backend: src/lib/roomBoard.ts)
